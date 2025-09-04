@@ -1,0 +1,139 @@
+If I was going to start from scratch with proxmox 9 build with these specs HP elitedesk G5 SFF CPU: 8 x Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz (1 Socket) RAM: 128GB STORAGE: 2 × 1.2 TB SSDs, 2 × 512 GB NVMe and 1 × 250 GB SSD NETWORK: 1 x 1Gb and 2 x 10Gb The system would mostly be used for LXCs and maybe one Windows 11 and one Linux VM
+
+I am thinking about added pfsense or sophos firewall to this system. what would I need to do to get it setup
+
+
+Synology 
+Create Media Share
+Control Panel > Shared Folder
+Create > Create Shared Folder
+
+Name: 
+Description:
+Location: Volume : Btrfs
+Uncheck Enable Recycle Bin
+
+File Services
+Enable NFS service
+Maximum NFS protocol: NFSv4.1
+
+Enabling NFS on the Shared folder
+    Edit Shared folder
+        Select NFS Permissions
+            Create 
+                Hostname or IP:
+                Privilege: Read/White
+                Squash: No mapping
+                Security sys
+            Check Enable asynchronous
+            Check Allow users to access mount subfolders
+            Save
+
+
+Proxmox
+apt-get install nala -y
+nala update && nala upgrade -y
+nala install nfs-kernel-server cifs-utils -y
+systemctl start nfs-kernel-server
+systemctl enable nfs-kernel-server
+
+
+Add existing drive to inventory
+Host > Disks > Select Disk > Wipe Disk > Initialize Disk with GPT > xfs format > name storage
+
+
+mkdir /mnt/pve
+mkdir /mnt/pve/storage
+mkdir /mnt/pve/storage/downloads
+mkdir /mnt/pve/storage/downloads/complete
+mkdir /mnt/pve/storage/downloads/complete/lidarr_music
+mkdir /mnt/pve/storage/downloads/complete/radarr_movies
+mkdir /mnt/pve/storage/downloads/complete/readarr_audiobooks
+mkdir /mnt/pve/storage/downloads/complete/readarr_books
+mkdir /mnt/pve/storage/downloads/complete/sonarr_anime
+mkdir /mnt/pve/storage/downloads/complete/sonarr_tv
+mkdir /mnt/pve/storage/downloads/incomplete
+mkdir /mnt/pve/storage/downloads/incomplete-nzbs
+mkdir /mnt/pve/storage/downloads/incomplete-torrents
+mkdir /mnt/pve/storage/downloads/incomplete-torrents/lidarr_music
+mkdir /mnt/pve/storage/downloads/incomplete-torrents/radarr_movies
+mkdir /mnt/pve/storage/downloads/incomplete-torrents/readarr_audiobooks
+mkdir /mnt/pve/storage/downloads/incomplete-torrents/readarr_books
+mkdir /mnt/pve/storage/downloads/incomplete-torrents/sonarr_anime
+mkdir /mnt/pve/storage/downloads/incomplete-torrents/sonarr_tv
+mkdir /mnt/pve/storage/downloads/torrents-nzbs
+
+
+mkdir /mnt/pve/synods2422
+Mount NFS Share on Proxmox
+Datacenter > Storage > add > NFS 
+General
+    ID: Make up name for NFS share
+    Server: IP address of synology
+    Export: pick from dropdown
+    Content: Pick one
+
+Change Permissions on the directory
+chmod -R 777 /mnt/pve/storage
+chmod -R 777 /mnt/pve/synods2422
+
+
+cd /mnt/pve/synods2422/
+
+/mnt/pve/storage/downloads/,mp=/downloads
+pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
+pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+
+100 nj-adguard-01
+102 nj-adguard-02
+103 nj-adguard-03
+303 sabnzbd         pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
+304 qbittorrent     pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
+305 flaresolverr
+306 Prowlarr
+307 sonarr-tv           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+308 sonarr-anime        pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+309 radarr-movies       pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+310 lidarr-music        pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+311 readarr-books       pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+312 readarr-audiobooks  pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+
+
+vzdump 100 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 100 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-100-2025_09_01-22_07_36.tar.zst --storage local-lvm
+
+vzdump 301 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 301 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-301-2025_09_01-23_02_39.tar.zst --storage local-lvm
+
+vzdump 302 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 302 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-302-2025_09_01-23_33_31.tar.zst --storage local-lvm
+
+vzdump 303 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 303 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-303-2025_09_01-22_34_50.tar.zst --storage local-lvm
+
+vzdump 304 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 304 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-304-2025_09_01-22_36_34.tar.zst --storage local-lvm
+
+vzdump 305 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 305 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-305-2025_09_01-22_37_59.tar.zst --storage local-lvm
+
+vzdump 306 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 306 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-306-2025_09_01-22_40_21.tar.zst --storage local-lvm
+
+vzdump 307 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 307 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-307-2025_09_01-22_42_01.tar.zst --storage local-lvm
+
+vzdump 308 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 308 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-308-2025_09_01-22_43_24.tar.zst --storage local-lvm
+
+vzdump 309 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 309 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-309-2025_09_01-22_45_15.tar.zst --storage local-lvm
+
+vzdump 310 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 310 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-310-2025_09_01-22_52_17.tar.zst --storage local-lvm
+
+vzdump 311 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 311 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-311-2025_09_01-22_56_22.tar.zst --storage local-lvm
+
+vzdump 312 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 312 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-312-2025_09_01-22_58_31.tar.zst --storage local-lvm
