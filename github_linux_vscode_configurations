@@ -85,3 +85,57 @@ Now you’re in the repo workspace:
 Source Control (branch icon on sidebar) shows changes.
 You can edit, commit, push, pull all from here.
 
+5. Daily workflow in VS Code
+
+Inside a cloned repo:
+
+Make changes
+Edit files as normal.
+VS Code will show modified files in the Source Control panel.
+
+Stage & commit
+Click the Source Control icon (branch with circle).
+Hover over a file → click + to stage, or click + at the top to stage all.
+Enter a commit message in the box, e.g. Add initial config.
+Hit Ctrl+Enter or click the checkmark to commit.
+
+Push to GitHub
+After committing, click the Sync Changes button (two arrows) or click the ellipsis … → Push.
+VS Code will use your SSH auth and push to origin on GitHub.
+
+Pull updates
+When there are upstream changes:
+Click Sync Changes again, or
+Ctrl+Shift+P → Git: Pull
+
+6. Quick sanity check
+
+To verify everything is wired up:
+
+Clone one repo from sprite007-stack.
+Create a tiny change (e.g. add a comment to a file).
+Commit + push from VS Code.
+Refresh the repo page on GitHub in your browser and confirm the commit shows there.
+If you tell me the name of one repo you want to start with, I can give you the exact clone URL and a mini “first commit” walkthrough tailored to it.
+
+Option A (Recommended): Use ~/.ssh/config to auto-load keys
+
+Linux Mint already uses gnome-keyring / ssh-agent under the hood.
+You simply tell SSH to automatically use your key.
+
+1. Create or edit your SSH config file
+nano ~/.ssh/config
+
+2. Add this block (safe, clean, recommended)
+Host *
+    AddKeysToAgent yes
+    IdentityFile ~/.ssh/id_ed25519
+
+3. Save & exit
+
+Press CTRL + O → Enter → CTRL + X.
+
+4. Test it
+ssh -T git@github.com
+
+If it says “Hi sprite007-stack!” without asking for a password or key, it’s working.
