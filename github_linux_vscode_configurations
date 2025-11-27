@@ -1,0 +1,5 @@
+1. Make sure Git is installed & configured
+
+Open a terminal in Linux Mint and run:
+git --version
+
