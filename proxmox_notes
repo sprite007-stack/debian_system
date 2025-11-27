@@ -34,6 +34,9 @@ nala install nfs-kernel-server cifs-utils -y
 systemctl start nfs-kernel-server
 systemctl enable nfs-kernel-server
 
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/post-pve-install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/cron-update-lxcs.sh)"
+
 
 Add existing drive to inventory
 Host > Disks > Select Disk > Wipe Disk > Initialize Disk with GPT > xfs format > name storage
@@ -59,6 +62,14 @@ mkdir /mnt/pve/storage/downloads/incomplete-torrents/readarr_books
 mkdir /mnt/pve/storage/downloads/incomplete-torrents/sonarr_anime
 mkdir /mnt/pve/storage/downloads/incomplete-torrents/sonarr_tv
 mkdir /mnt/pve/storage/downloads/torrents-nzbs
+
+mkdir /mnt/pve/storage/media
+mkdir /mnt/pve/storage/media/lidarr_music
+mkdir /mnt/pve/storage/media/radarr_movies
+mkdir /mnt/pve/storage/media/readarr_audiobooks
+mkdir /mnt/pve/storage/media/readarr_books
+mkdir /mnt/pve/storage/media/sonarr_anime
+mkdir /mnt/pve/storage/media/sonarr_tv
 
 
 mkdir /mnt/pve/synods2422
