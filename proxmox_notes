@@ -1,12 +1,5 @@
 If I was going to start from scratch with proxmox 9 build with 
 
-these specs HP elitedesk G5 SFF CPU: 8 x Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz (1 Socket) 
-RAM: 128GB 
-STORAGE: 2 × 1.2 TB SSDs, 2 × 512 GB NVMe and 1 × 250 GB SSD NETWORK: 1 x 1Gb and 2 x 10Gb The system would mostly be used for LXCs and maybe one Windows 11 and one Linux VM
-
-I am thinking about added pfsense or sophos firewall to this system. what would I need to do to get it setup
-
-
 Synology 
 Create Media Share
 Control Panel > Shared Folder
