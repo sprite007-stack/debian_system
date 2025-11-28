@@ -85,7 +85,6 @@ General
     Export: pick from dropdown
     Content: Pick one
 
-
 #Configuring Mount Points for services
 pct set 302 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
 pct set 302 --mp2 /mnt/pve/storage/media,mp=/media
