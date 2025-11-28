@@ -120,17 +120,17 @@ readarr-audiobooks 	http://10.0.0.32:8787
 103 nj-adguard-03       http://10.0.0.12:80
 
 301 plex                http://10.0.0.21:32400/web      pct set 301 --mp2 /mnt/pve/storage/media,mp=/media
-302 jellyfin            http://10.0.0.22:8096/web
-303 sabnzbd         pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
-304 qbittorrent     pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
-305 flaresolverr
-306 Prowlarr
-307 sonarr-tv           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
-308 sonarr-anime        pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
-309 radarr-movies       pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
-310 lidarr-music        pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
-311 readarr-books       pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
-312 readarr-audiobooks  pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+302 jellyfin            http://10.0.0.22:8096/web       pct set 302 --mp2 /mnt/pve/storage/media,mp=/media
+303 sabnzbd             http://10.0.0.23:7777           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
+304 qbittorrent         http://10.0.0.24:8090                               pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
+305 flaresolverr        http://10.0.0.25:8191
+306 Prowlarr            http://10.0.0.26:9696
+307 sonarr-tv           http://10.0.0.27:8989           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+308 sonarr-anime        http://10.0.0.28:8989           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+309 radarr-movies       http://10.0.0.29:7878           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+310 lidarr-music        http://10.0.0.30:8686           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+311 readarr-books       http://10.0.0.31:8787           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
+312 readarr-audiobooks  http://10.0.0.32:8787           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/synods2422/media,mp=/media
 
 
 vzdump 100 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
