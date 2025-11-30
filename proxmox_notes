@@ -80,6 +80,12 @@ chmod -R 777 /mnt/pve/storage
 Mount NFS Share on Proxmox
 Datacenter > Storage > add > NFS 
 General
+    ID: Backup      #Make up name for NFS share
+    Server: 10.0.0.45        #IP address of synology
+    Export: pick from dropdown
+    Content: Pick one
+
+    General
     ID: Make up name for NFS share
     Server: IP address of synology
     Export: pick from dropdown
@@ -87,7 +93,7 @@ General
 
 #Configuring Mount Points for services
 pct set 302 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
-pct set 302 --mp2 /mnt/pve/storage/media,mp=/media
+pct set 307 --mp2 /mnt/pve/storage/media,mp=/media
 
 000 nj-adguard-vip      http://10.0.0.9:80
 100 nj-adguard-01       http://10.0.0.10:80
@@ -100,12 +106,12 @@ pct set 302 --mp2 /mnt/pve/storage/media,mp=/media
 304 qbittorrent         http://10.0.0.24:8090           pct set 304 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
 305 flaresolverr        http://10.0.0.25:8191
 306 Prowlarr            http://10.0.0.26:9696
-307 sonarr-tv           http://10.0.0.27:8989           pct set 307 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/storage/media,mp=/media
-308 sonarr-anime        http://10.0.0.28:8989           pct set 308 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/storage/media,mp=/media
-309 radarr-movies       http://10.0.0.29:7878           pct set 309 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/storage/media,mp=/media
+307 sonarr-tv           http://10.0.0.27:8989           pct set 307 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 307 --mp2 /mnt/pve/storage/media,mp=/media
+308 sonarr-anime        http://10.0.0.28:8989           pct set 308 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 308 --mp2 /mnt/pve/storage/media,mp=/media
+309 radarr-movies       http://10.0.0.29:7878           pct set 309 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 309 --mp2 /mnt/pve/storage/media,mp=/media
 310 lidarr-music        http://10.0.0.30:8686           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/storage/media,mp=/media
-311 readarr-books       http://10.0.0.31:8787           pct set 311 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/storage/media,mp=/media
-312 readarr-audiobooks  http://10.0.0.32:8787           pct set 312 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/storage/media,mp=/media
+311 readarr-books       http://10.0.0.31:8787           pct set 311 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 311 --mp2 /mnt/pve/storage/media,mp=/media
+312 readarr-audiobooks  http://10.0.0.32:8787           pct set 312 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 312 --mp2 /mnt/pve/storage/media,mp=/media
 
 #Backing up LXCs and VMs to synods2422
 zdump 100 --mode snapshot --compress zstd --dumpdir /mnt/pve/storage/synods2422/proxmox_backup

@@ -1,0 +1,174 @@
+1. Connect the iDRAC Port
+
+Every Dell PowerEdge has a dedicated out-of-band management port labeled:
+
+iDRAC
+
+or has “wrench” icon
+
+Steps:
+
+Plug an Ethernet cable into the dedicated iDRAC port.
+
+Connect it to a management switch or any network with DHCP.
+
+Power on the server (even if the OS is not installed, iDRAC boots independently).
+
+2. Access the iDRAC Configuration Menu (BIOS Level)
+
+During boot:
+
+When you see the Dell logo, press
+F2 → System Setup
+OR
+Ctrl + E → iDRAC Settings
+
+Navigate to:
+iDRAC Settings → Network
+
+Here you can configure:
+
+Enable NIC → Enabled
+
+NIC Selection → Dedicated
+
+IPv4 Settings
+
+DHCP: On (or Off if using static)
+
+IP Address
+
+Subnet Mask
+
+Gateway
+
+Example Static Config:
+
+IPv4: Enabled
+DHCP: Disabled
+IP: 192.168.1.50
+Mask: 255.255.255.0
+GW: 192.168.1.1
+
+
+Press Apply, then Finish, and reboot if required.
+
+3. Get the Default iDRAC Credentials
+
+The default login depends on generation:
+
+iDRAC8 (R730xd, older models)
+
+User: root
+
+Password: printed on white sticker on pull-out info tag under “iDRAC Password”.
+
+iDRAC9 (R740xd and higher)
+
+User: root
+
+Password: printed on the service tag pull-out card under “iDRAC Password”.
+
+4. Log In to the iDRAC Web Interface
+
+Once network is configured:
+
+Open a browser and enter the iDRAC IP:
+
+https://192.168.1.50
+
+
+Accept any certificate warnings.
+
+Log in using:
+
+Username: root
+
+Password: (as printed on the server tag)
+
+You should now see the iDRAC dashboard.
+
+5. Change the Default Password (Highly Recommended)
+
+Go to:
+
+iDRAC Settings → User Authentication → Local Users → root → Edit
+
+Set:
+
+New password
+
+Optional: disable unused accounts
+
+6. Optional — Set Up iDRAC Networking Features
+DNS Naming
+
+iDRAC Settings → Network → Common Settings
+
+iDRAC Name: servername-idrac
+
+Register with DNS: Yes (optional)
+
+Enable/Disable VLAN
+
+If using management VLAN:
+
+Enable VLAN: ON
+VLAN ID: <your VLAN>
+Priority: 1
+
+7. Optional — Set Up Email Alerts
+
+Go to:
+
+iDRAC Settings → Alerts → SMTP
+
+Configure:
+
+SMTP Server
+
+From Address
+
+Recipients
+
+Test email
+
+8. Optional — Update iDRAC Firmware
+
+Download firmware from Dell:
+Search “iDRAC firmware R730xd” or “iDRAC9 firmware R740xd”
+
+Upload via:
+Maintenance → System Update
+
+Keeps features and security patches current.
+
+9. Optional — Assign a Static IP via RACADM CLI (Advanced)
+
+If you cannot access BIOS:
+
+Login via SSH or console:
+
+racadm setniccfg -s 192.168.1.50 255.255.255.0 192.168.1.1
+
+
+Reboot iDRAC:
+
+racadm racreset
+
+10. Confirm iDRAC is Working
+
+From a workstation:
+
+ping 192.168.1.50
+
+
+Open browser to that IP and verify:
+
+System information is loading
+
+Sensors are reporting correctly
+
+You can open Virtual Console
+
+You can mount ISOs
