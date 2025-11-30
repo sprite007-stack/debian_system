@@ -172,3 +172,269 @@ Sensors are reporting correctly
 You can open Virtual Console
 
 You can mount ISOs
+
+
+
+# A hardened security baseline for iDRAC
+
+Below is a complete hardened security baseline for iDRAC8 & iDRAC9 specifically tuned for Dell R730xd/R740xd servers and homelab/enterprise environments. This is the same type of hardening you’d apply in a regulated production environment.
+
+I structured it as:
+
+Baseline Summary (Quick Mode)
+
+Full Hardening Checklist (Recommended)
+
+CLI (RACADM) Commands for Automation
+
+Optional: Compliance Baseline (CIS-Style)
+
+✅ 1. Hardened iDRAC Security Baseline (Quick Summary)
+
+Minimum Requirements:
+
+Disable root or change to long password
+
+Create a named admin account (not “root”)
+
+Disable all unused services (SSH, IPMI, SNMP, VNC, WSMAN, RACADM)
+
+Enable TLS 1.2/1.3 only
+
+Disable older ciphers
+
+Enforce strong password policy
+
+Enable session timeout (Defaults are insecure)
+
+Restrict IP access (ACLs or firewall)
+
+Disable virtual console plug-ins except HTML5
+
+Keep iDRAC firmware fully updated
+
+🔒 2. Full iDRAC Security Hardening Checklist
+A. User Accounts & Authentication
+1. Create a unique admin account
+User: bryan-admin
+Permissions: Administrator
+
+2. Disable root login (recommended)
+
+iDRAC Settings → Users → root → Disable
+(Keep password stored offline)
+
+3. Enforce Password Policy
+
+Minimum length: 15+ characters
+
+Require upper/lower/number/special
+
+Max age: 365 days (optional for homelab)
+
+Password lockout: 5 attempts
+
+Lockout time: 15 minutes
+
+B. Network Security Settings
+1. Use a dedicated management VLAN
+VLAN ID: <your ID>
+Priority: 1
+
+2. Disable unused NIC selection
+
+Set:
+
+NIC = Dedicated
+
+
+Disable LOM failover unless required.
+
+3. Restrict IPs with the built-in ACL
+
+iDRAC Settings → Network → Access Control
+
+Example:
+
+Allow: 10.0.0.0/24
+Deny: 0.0.0.0/0
+
+C. Encryption Settings
+1. Disable insecure protocols
+
+Turn OFF:
+
+TLS 1.0
+
+TLS 1.1
+
+SSLv3
+
+HTTP (force HTTPS only)
+
+Turn ON:
+
+TLS 1.2 (iDRAC9 supports TLS 1.3)
+
+HTTPS Redirection
+
+2. Disable weak ciphers
+
+Recommended:
+
+Enable only ECDHE_RSA and AES256 suites
+
+D. Service Hardening (Most Important)
+
+Disable everything except what you actively use:
+
+Service	Recommendation
+SSH	OFF unless automating
+IPMI over LAN	OFF (major security risk)
+VNC	OFF
+WSMAN	OFF
+SNMP	OFF unless monitoring
+Virtual Console	HTML5 only
+Redfish	ON (secure modern API)
+RACADM	OFF unless scripting
+
+Virtual Media:
+
+Enable only when needed, then turn it off.
+
+IPMI Over LAN is the biggest risk—disable this always.
+
+E. Session Security
+Set the following:
+
+Web UI timeout: 10–15 mins
+
+SSH timeout: 5 mins
+
+Max concurrent sessions: 2
+
+Disable “Keep me logged in”
+
+RSTP Edge-Port: not related to security, but OK to leave enabled on switch ports for LACP
+
+F. Logging, Monitoring, and Alerts
+Enable:
+
+System Event Log (SEL)
+
+Lifecycle Controller log retention
+
+Email alerts (SMTP)
+
+Power events
+
+Fan failures
+
+Hardware errors
+
+Intrusion detection
+
+Configure:
+
+Automatic SupportAssist Collection → Optional
+
+Remote syslog (if you have a syslog server)
+
+G. Firmware & Supply Chain Security
+
+Update to latest iDRAC firmware
+
+Enable:
+
+Secure Boot
+UEFI Secure Boot (BIOS)
+Signed firmware updates only
+Block downgrade
+
+
+Disable:
+
+Auto-firmware rollback
+Unauthorized BIOS changes
+
+H. Physical Security
+
+Enable:
+
+Chassis intrusion detection
+
+Tamper alert emails
+
+Optional:
+
+Set BIOS admin password
+
+Disable boot order modifications
+
+Disable USB booting
+
+🖥️ 3. RACADM Commands for Automated Hardening
+
+Here are the exact CLI commands from a remote machine using RACADM.
+
+A. Disable root user
+racadm set iDRAC.Users.2.Enable 0
+
+B. Enforce HTTPS Only
+racadm set iDRAC.WebServer.Protocol HTTPS
+racadm set iDRAC.WebServer.TLSProtocol TLS1.2
+racadm set iDRAC.WebServer.HttpPort 0
+racadm set iDRAC.WebServer.HttpRedirection 1
+
+C. Disable Insecure Services
+racadm set iDRAC.SSH.Enable 0
+racadm set iDRAC.VirtualConsole.PluginType 1   # HTML5 only
+racadm set iDRAC.IPMILan.Enable 0
+racadm set iDRAC.SNMP.AgentEnable 0
+racadm set iDRAC.WSMAN.Enable 0
+racadm set iDRAC.Racadm.Enable 0
+
+D. Restrict IP Access
+racadm set iDRAC.IPBlocking.Enable 1
+racadm set iDRAC.IPBlocking.1.Enable 1
+racadm set iDRAC.IPBlocking.1.SubnetMask 255.255.255.0
+racadm set iDRAC.IPBlocking.1.IPAddress 10.0.0.0
+
+E. Set session timeout
+racadm set iDRAC.WebServer.SessionTimeout 900
+
+🛡️ 4. CIS-Style Compliance Baseline
+
+If you want a compliance-level standard:
+
+Level 1 — Basic Security
+
+Change default password
+
+Enable HTTPS only
+
+Disable IPMI over LAN
+
+HTML5 console
+
+Enable logging
+
+Update firmware
+
+Level 2 — Enterprise Production
+
+Disable root
+
+Named admin accounts only
+
+All unused protocols OFF
+
+TLS1.2/1.3 only
+
+Strong password policy
+
+Network ACL
+
+Remote syslog
+
+Signed updates only
