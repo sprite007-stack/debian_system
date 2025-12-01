@@ -41,35 +41,33 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/Proxmo
 Add existing drive to inventory
 Host > Disks > Select Disk > Wipe Disk > Initialize Disk with GPT > xfs format > name storage
 
+mkdir /mnt/data
+mkdir /mnt/data/downloads
+mkdir /mnt/data/downloads/complete
+mkdir /mnt/data/downloads/complete/lidarr_music
+mkdir /mnt/data/downloads/complete/radarr_movies
+mkdir /mnt/data/downloads/complete/readarr_audiobooks
+mkdir /mnt/data/downloads/complete/readarr_books
+mkdir /mnt/data/downloads/complete/sonarr_anime
+mkdir /mnt/data/downloads/complete/sonarr_tv
+mkdir /mnt/data/downloads/incomplete
+mkdir /mnt/data/downloads/incomplete-nzbs
+mkdir /mnt/data/downloads/incomplete-torrents
+mkdir /mnt/data/downloads/incomplete-torrents/lidarr_music
+mkdir /mnt/data/downloads/incomplete-torrents/radarr_movies
+mkdir /mnt/data/downloads/incomplete-torrents/readarr_audiobooks
+mkdir /mnt/data/downloads/incomplete-torrents/readarr_books
+mkdir /mnt/data/downloads/incomplete-torrents/sonarr_anime
+mkdir /mnt/data/downloads/incomplete-torrents/sonarr_tv
+mkdir /mnt/data/downloads/torrents-nzbs
 
-mkdir /mnt/pve
-mkdir /mnt/pve/storage
-mkdir /mnt/pve/storage/downloads
-mkdir /mnt/pve/storage/downloads/complete
-mkdir /mnt/pve/storage/downloads/complete/lidarr_music
-mkdir /mnt/pve/storage/downloads/complete/radarr_movies
-mkdir /mnt/pve/storage/downloads/complete/readarr_audiobooks
-mkdir /mnt/pve/storage/downloads/complete/readarr_books
-mkdir /mnt/pve/storage/downloads/complete/sonarr_anime
-mkdir /mnt/pve/storage/downloads/complete/sonarr_tv
-mkdir /mnt/pve/storage/downloads/incomplete
-mkdir /mnt/pve/storage/downloads/incomplete-nzbs
-mkdir /mnt/pve/storage/downloads/incomplete-torrents
-mkdir /mnt/pve/storage/downloads/incomplete-torrents/lidarr_music
-mkdir /mnt/pve/storage/downloads/incomplete-torrents/radarr_movies
-mkdir /mnt/pve/storage/downloads/incomplete-torrents/readarr_audiobooks
-mkdir /mnt/pve/storage/downloads/incomplete-torrents/readarr_books
-mkdir /mnt/pve/storage/downloads/incomplete-torrents/sonarr_anime
-mkdir /mnt/pve/storage/downloads/incomplete-torrents/sonarr_tv
-mkdir /mnt/pve/storage/downloads/torrents-nzbs
-
-mkdir /mnt/pve/storage/media
-mkdir /mnt/pve/storage/media/lidarr_music
-mkdir /mnt/pve/storage/media/radarr_movies
-mkdir /mnt/pve/storage/media/readarr_audiobooks
-mkdir /mnt/pve/storage/media/readarr_books
-mkdir /mnt/pve/storage/media/sonarr_anime
-mkdir /mnt/pve/storage/media/sonarr_tv
+mkdir /mnt/data/media
+mkdir /mnt/data/media/lidarr_music
+mkdir /mnt/data/media/radarr_movies
+mkdir /mnt/data/media/readarr_audiobooks
+mkdir /mnt/data/media/readarr_books
+mkdir /mnt/data/media/sonarr_anime
+mkdir /mnt/data/media/sonarr_tv
 
 mkdir /mnt/pve/storage/synods2422
 mkdir /mnt/pve/storage/synods1821
@@ -100,18 +98,18 @@ pct set 307 --mp2 /mnt/pve/storage/media,mp=/media
 102 nj-adguard-02       http://10.0.0.11:80
 103 nj-adguard-03       http://10.0.0.12:80
 
-301 plex                http://10.0.0.21:32400/web      pct set 301 --mp2 /mnt/pve/storage/media,mp=/media
-302 jellyfin            http://10.0.0.22:8096/web       pct set 302 --mp2 /mnt/pve/storage/media,mp=/media
-303 sabnzbd             http://10.0.0.23:7777           pct set 303 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
-304 qbittorrent         http://10.0.0.24:8090           pct set 304 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
+301 plex                http://10.0.0.21:32400/web      pct set 301 --mp2 /mnt/data/media,mp=/media
+302 jellyfin            http://10.0.0.22:8096/web       pct set 302 --mp2 /mnt/data/media,mp=/media
+303 sabnzbd             http://10.0.0.23:7777           pct set 303 --mp1 /mnt/data/downloads/,mp=/downloads
+304 qbittorrent         http://10.0.0.24:8090           pct set 304 --mp1 /mnt/data/downloads/,mp=/downloads
 305 flaresolverr        http://10.0.0.25:8191
 306 Prowlarr            http://10.0.0.26:9696
-307 sonarr-tv           http://10.0.0.27:8989           pct set 307 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 307 --mp2 /mnt/pve/storage/media,mp=/media
-308 sonarr-anime        http://10.0.0.28:8989           pct set 308 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 308 --mp2 /mnt/pve/storage/media,mp=/media
-309 radarr-movies       http://10.0.0.29:7878           pct set 309 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 309 --mp2 /mnt/pve/storage/media,mp=/media
-310 lidarr-music        http://10.0.0.30:8686           pct set 310 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/pve/storage/media,mp=/media
-311 readarr-books       http://10.0.0.31:8787           pct set 311 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 311 --mp2 /mnt/pve/storage/media,mp=/media
-312 readarr-audiobooks  http://10.0.0.32:8787           pct set 312 --mp1 /mnt/pve/storage/downloads/,mp=/downloads, pct set 312 --mp2 /mnt/pve/storage/media,mp=/media
+307 sonarr-tv           http://10.0.0.27:8989           pct set 307 --mp1 /mnt/data/downloads/,mp=/downloads, pct set 307 --mp2 /mnt/data/media,mp=/media
+308 sonarr-anime        http://10.0.0.28:8989           pct set 308 --mp1 /mnt/data/downloads/,mp=/downloads, pct set 308 --mp2 /mnt/data/media,mp=/media
+309 radarr-movies       http://10.0.0.29:7878           pct set 309 --mp1 /mnt/data/downloads/,mp=/downloads, pct set 309 --mp2 /mnt/data/media,mp=/media
+310 lidarr-music        http://10.0.0.30:8686           pct set 310 --mp1 /mnt/data/downloads/,mp=/downloads, pct set 310 --mp2 /mnt/data/media,mp=/media
+311 readarr-books       http://10.0.0.31:8787           pct set 311 --mp1 /mnt/data/downloads/,mp=/downloads, pct set 311 --mp2 /mnt/data/media,mp=/media
+312 readarr-audiobooks  http://10.0.0.32:8787           pct set 312 --mp1 /mnt/data/downloads/,mp=/downloads, pct set 312 --mp2 /mnt/data/media,mp=/media
 
 #Backing up LXCs and VMs to synods2422
 vzdump 100 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
@@ -123,8 +121,14 @@ pct restore 100 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-100-2025_09_01-22_
 vzdump 100 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
 pct restore 100 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-100-2025_11_30-18_56_02.tar.zst --storage local-lvm
 
+vzdump 101 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 101 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-101-2025_11_30-19_01_22.tar.zst --storage local-lvm
+
+vzdump 102 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
+pct restore 102 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-102-2025_11_30-19_09_16.tar.zst --storage local-lvm
+
 vzdump 301 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
-pct restore 301 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-301-2025_09_01-23_02_39.tar.zst --storage local-lvm
+pct restore 301 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-301-2025_11_30-19_09_57.tar.zst --storage local-lvm
 
 vzdump 302 --mode snapshot --compress zstd --dumpdir /mnt/pve/synods2422/proxmox_backup
 pct restore 302 /mnt/pve/synods2422/proxmox_backup/vzdump-lxc-302-2025_09_01-23_33_31.tar.zst --storage local-lvm
