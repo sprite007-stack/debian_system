@@ -1,48 +1,128 @@
-cd /mnt/pve/storage/
+✅ PART 1 — Verify sdb is unused
 
-Step 1: Check existing partitions
-First, see if these disks already have partitions or filesystems:
-lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT
+Run:
 
-Step 2: Partition (if needed)
-parted /dev/sda mklabel gpt
-parted /dev/sdb mklabel gpt
-parted /dev/sdc mklabel gpt
-parted /dev/nvme0n1 mklabel gpt
+lsblk -f
 
 
-parted -a opt /dev/sda mkpart primary ext4 0% 100%
-parted -a opt /dev/sdb mkpart primary ext4 0% 100%
-parted -a opt /dev/sdc mkpart primary ext4 0% 100%
-parted -a opt /dev/nvme0n1 mkpart primary ext4 0% 100%
+You should see no filesystem, no mountpoint, no partitions under sdb.
 
-Step 3: Create filesystem
-mkfs.ext4 /dev/sda1
+Example expected:
+
+sdb      8:16   0  74.5T  0 disk 
+
+
+If it already has partitions, I’ll tell you how to wipe safely.
+
+✅ PART 2 — Wipe disk (only if empty)
+
+If sdb has old signatures:
+
+wipefs -a /dev/sdb
+
+✅ PART 3 — Create a GPT partition table
+parted /dev/sdb --script mklabel gpt
+
+✅ PART 4 — Create a single large partition
+parted -a optimal /dev/sdb --script mkpart primary ext4 0% 100%
+
+
+Now check:
+
+lsblk
+
+
+You should see:
+
+sdb
+└─sdb1   8:17  0  74.5T  0 part
+
+✅ PART 5 — Format the partition (choose ext4 or xfs)
+For large continuous video files, XFS is better
+
+Fast metadata, faster I/O for huge files.
+
+mkfs.xfs -f /dev/sdb1
+
+
+If you prefer ext4:
+
 mkfs.ext4 /dev/sdb1
-mkfs.ext4 /dev/sdc1
-mkfs.ext4 /dev/nvme0n1p1
 
-Step 4: Create mount points
-mkdir -p /mnt/sda1
-mkdir -p /mnt/sdb1
-mkdir -p /mnt/sdc1
-mkdir -p /mnt/nvme0n1p1
+✅ PART 6 — Create mount point
 
-Step 5: Mount manually
-mount /dev/sda1 /mnt/sda1
-mount /dev/sdb1 /mnt/sdb1
-mount /dev/sdc1 /mnt/sdc1
-mount /dev/nvme0n1p1 /mnt/nvme0n1p1
+Since you want this disk to be your media storage:
+
+mkdir -p /mnt/media
+
+✅ PART 7 — Mount the drive
+mount /dev/sdb1 /mnt/media
 
 
-Step 6: Persist mounts in /etc/fstab
-Find the UUIDs:
-blkid
-/dev/sda1: UUID="65a9d00f-0d23-47f4-9774-04e405ae4421"
-/dev/sdb1: UUID="058e5ecf-8dd6-4324-9d11-c07791556e54"
-/dev/sdc1: UUID="70cc7619-d043-4ff7-8586-815b76e615f8" 
-/dev/nvme0n1p1: UUID="a02ca7b0-c42e-46aa-9058-e990532812b4" 
+Check:
+
+df -h /mnt/media
+
+
+You should now see:
+
+/dev/sdb1    74T    0T   74T   0%   /mnt/media
+
+✅ PART 8 — Make the mount permanent
+
+Edit fstab:
 
 nano /etc/fstab
 
 
+Add:
+
+For XFS:
+/dev/sdb1   /mnt/media   xfs   defaults,noatime   0  0
+
+For EXT4:
+/dev/sdb1   /mnt/media   ext4   defaults,noatime   0  0
+
+
+Test:
+
+mount -a
+
+
+No errors → good.
+
+🔥 PART 9 — Add to Proxmox storage GUI
+
+Since this is file storage, add it as a Directory:
+
+Datacenter → Storage → Add → Directory
+
+Field	Value
+ID	media-sdb
+Directory	/mnt/media
+Content	VZDump, ISO, Snippets, or just select “Other”
+Nodes	your node
+Shared	No (unless NFS/SMB exported later)
+
+Now Proxmox knows about the storage.
+
+🔥 PART 10 — Export to Linux Mint or Windows (optional)
+
+You said earlier you want to access the large storage from your Mint desktop.
+
+If you want NFS:
+
+Add to /etc/exports on Proxmox:
+
+/mnt/media 192.168.1.0/24(rw,sync,no_subtree_check,no_root_squash)
+
+
+Apply:
+
+exportfs -arv
+systemctl restart nfs-kernel-server
+
+
+Mount from Mint:
+
+sudo mount -t nfs proxmox-ip:/mnt/media /mnt/proxmox-media
