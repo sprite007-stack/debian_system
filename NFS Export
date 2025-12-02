@@ -1,0 +1,95 @@
+⭐ Recommended: NFS Export
+
+Here is the exact setup to export /mnt/media-local via NFS from Proxmox → mount on Mint.
+
+🔧 STEP 1 — Install NFS server on Proxmox
+
+Run on Proxmox:
+
+apt update
+apt install nfs-kernel-server -y
+
+🔧 STEP 2 — Create an export entry
+
+Edit /etc/exports:
+
+nano /etc/exports
+
+
+Add this line (replace your LAN subnet if needed):
+
+/mnt/media-local 192.168.1.0/24(rw,sync,no_subtree_check,no_root_squash)
+
+
+Explanation:
+
+rw = read/write
+
+sync = safe writes
+
+no_subtree_check = required for stability
+
+no_root_squash = lets Mint root account write properly
+
+Save & exit.
+
+🔧 STEP 3 — Apply the export rules
+exportfs -arv
+systemctl restart nfs-kernel-server
+
+
+Check:
+
+exportfs -v
+
+
+You should now see /mnt/media-local exported.
+
+🔧 STEP 4 — Mount the share on Linux Mint
+
+First, install NFS client:
+
+sudo apt install nfs-common -y
+
+
+Create a mount point:
+
+sudo mkdir -p /mnt/proxmox-media
+
+
+Now mount:
+
+sudo mount -t nfs nj-proxmox-01:/mnt/media-local /mnt/proxmox-media
+
+
+Replace nj-proxmox-01 with your Proxmox IP address if needed (ex: 192.168.1.50).
+
+Verify:
+
+df -h /mnt/proxmox-media
+
+
+You should now see the 62.7T share from Proxmox.
+
+🔧 STEP 5 — Make the mount persistent on Mint
+
+Edit fstab:
+
+sudo nano /etc/fstab
+
+
+Add:
+
+nj-proxmox-01:/mnt/media-local  /mnt/proxmox-media  nfs  defaults  0  0
+
+
+or (better performance + stability):
+
+nj-proxmox-01:/mnt/media-local  /mnt/proxmox-media  nfs  rw,noatime,hard,intr  0  0
+
+
+Save → exit.
+
+Test:
+
+sudo mount -a
