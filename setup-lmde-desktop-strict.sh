@@ -84,3 +84,11 @@ https://www.youtube.com/watch?v=Q_Uoe5H4ORs
 
 brave
 gadget march message equal document ride sun elevator thought bitter tip together imitate zone kiwi hour tunnel whip approve theory person device velvet round number
+
+# Setup Local Firewall
+
+# Videos to watch after installing
+https://www.youtube.com/watch?v=TrbB0WwywOQ
+https://www.youtube.com/watch?v=XYDQK5i0tmY
+https://www.youtube.com/watch?v=QwFxoDCXlM8
+https://www.youtube.com/watch?v=kV8Hu54zhbA&t=1s
