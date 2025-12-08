@@ -17,7 +17,6 @@ sudo nala install -y \
   gimp \
   filezilla \
   neovim \
-  neofetch \
   numix-icon-theme \
   ncdu \
   ffmpeg \
