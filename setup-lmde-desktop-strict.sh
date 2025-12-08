@@ -78,6 +78,16 @@ echo 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting fast-syntax-highl
 
 echo "All steps completed. Restart your terminal or run 'zsh' to begin."
 
+To enable double-click renaming of files and folders in Linux Mint, 
+you need to configure the Nemo file manager, 
+which is used by the Cinnamon desktop environment. This feature is known as "Quick-Rename" and is disabled by default.
+
+To enable it, follow these steps:
+
+Open the Nemo file manager.
+Go to Edit > Preferences > Behavior.
+Check the box labeled "Click twice with a pause in between to rename items".
+
 Wallpaper https://alphacoders.com/
 https://www.youtube.com/watch?v=Q_Uoe5H4ORs
 
