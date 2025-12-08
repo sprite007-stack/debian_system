@@ -13,6 +13,7 @@ sudo nala update && sudo nala upgrade -y
 sudo nala install -y \
   gnome-font-viewer \
   vlc \
+  Fastfetch \
   transmission \
   gimp \
   filezilla \
