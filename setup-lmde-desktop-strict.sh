@@ -12,6 +12,7 @@ sudo nala update && sudo nala upgrade -y
 # Install additional system packages
 sudo nala install -y \
   gnome-font-viewer \
+  tealdeer \
   vlc \
   Fastfetch \
   transmission \
