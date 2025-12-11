@@ -95,6 +95,14 @@ gsettings set org.nemo.preferences click-policy 'double'
 #Verify the new setting
 gsettings get org.nemo.preferences click-policy
 
+#Add nemo-mediainfo-tab - Download into Downloads without changing directory
+wget -P ~/Downloads https://github.com/linux-man/nemo-mediainfo-tab/releases/download/v1.0.4/nemo-mediainfo-tab_1.0.4_all.deb
+
+#Install the nemo-mediainfo-tab file from Downloads
+sudo dpkg -i ~/Downloads/nemo-mediainfo-tab_1.0.4_all.deb
+sudo apt --fix-broken install
+
+
 #Restart Nemo to apply
 nemo -q
 
