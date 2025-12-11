@@ -98,6 +98,15 @@ gsettings get org.nemo.preferences click-policy
 #Restart Nemo to apply
 nemo -q
 
+#Enable the firewall
+sudo ufw enable
+
+#You will see:
+Command may disrupt existing ssh connections. Proceed with operation (y|n)?
+
+#Check status
+sudo ufw status verbose
+
 Wallpaper https://alphacoders.com/
 https://www.youtube.com/watch?v=Q_Uoe5H4ORs
 
