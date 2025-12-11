@@ -34,7 +34,10 @@ sudo nala install -y \
   tmux \
   zsh \
   zsh-autosuggestions \
-  zsh-syntax-highlighting
+  zsh-syntax-highlighting \
+  ffmpegthumbnailer \
+  nemo-media-columns \
+  
 
 # Download and install JDownloader
 https://jdownloader.org/jdownloader2#selection=linux
