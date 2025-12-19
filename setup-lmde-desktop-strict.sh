@@ -15,6 +15,9 @@ sudo nala install -y \
   tealdeer \
   vlc \
   Fastfetch \
+  preload \
+  tlp \
+  tlp-rdw \
   transmission \
   gimp \
   filezilla \
