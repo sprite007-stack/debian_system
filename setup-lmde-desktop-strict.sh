@@ -18,7 +18,6 @@ sudo nala install -y \
   gnome-font-viewer \
   tealdeer \
   vlc \
-  Fastfetch \
   preload \
   tlp \
   tlp-rdw \
