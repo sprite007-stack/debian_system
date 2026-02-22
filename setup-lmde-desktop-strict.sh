@@ -2,8 +2,12 @@
 
 set -e
 
+sudo apt-get update -o Acquire::AllowReleaseInfoChange::Version=true
+echo 'Acquire::AllowReleaseInfoChange "true";' | sudo tee /etc/apt/apt.conf.d/99releaseinfo
+
 # Install nala
 sudo apt-get update
+sudo apt full-upgrade
 sudo apt-get install -y nala
 
 # Update and upgrade Linux distro using nala
