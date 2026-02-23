@@ -68,6 +68,19 @@ zsh --version
 # Make zsh the default shell
 chsh -s $(which zsh)
 
+# Fix It (Most Likely Cinnamon / GNOME Terminal)
+
+Open your terminal → go to:
+
+Edit → Preferences → Your Profile → Command
+
+Look for:
+
+☑ “Run a custom command instead of my shell”
+
+# Set custom command to:
+/usr/bin/zsh -l
+
 # Install oh-my-zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 
