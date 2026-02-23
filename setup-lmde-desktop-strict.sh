@@ -120,6 +120,7 @@ wget -P ~/Downloads https://github.com/linux-man/nemo-mediainfo-tab/releases/dow
 
 #Install the nemo-mediainfo-tab file from Downloads
 sudo dpkg -i ~/Downloads/nemo-mediainfo-tab_1.0.4_all.deb
+sudo nala install -f 
 sudo apt --fix-broken install
 
 
