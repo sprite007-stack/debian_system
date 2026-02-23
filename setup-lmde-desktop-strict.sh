@@ -46,6 +46,7 @@ sudo nala install -y \
   
 
 # Download and install JDownloader
+sudo nala install openjdk-21-jre
 https://jdownloader.org/jdownloader2#selection=linux
 https://mega.nz/file/qU1TCYjL#g8a05FYWPGyqFgy1QWQ9L5nScEOmOU6iZh1eDhSn-sk
 
