@@ -15,35 +15,67 @@ sudo nala update && sudo nala upgrade -y
 
 # Install additional system packages
 sudo nala install -y \
-  gnome-font-viewer \
-  tealdeer \
-  vlc \
-  preload \
-  tlp \
-  tlp-rdw \
-  transmission \
-  gimp \
+  autofs \
+  curl \
+  ffmpeg \
+  ffmpegthumbnailer \
   filezilla \
+  fonts-font-awesome \
+  gimp \
+  git \
+  gnome-font-viewer \
+  gnome-tweaks \
+  htop \
+  ncdu \
+  nemo-media-columns \
   neovim \
   numix-icon-theme \
-  ncdu \
-  ffmpeg \
-  gnome-tweaks \
+  preload \
   p7zip \
+  remmina \
+  remmina-plugin-rdp \
+  tealdeer \
+  tlp \
+  tlp-rdw \
+  tmux \
+  transmission \
+  vlc \
   unrar \
   wget \
-  curl \
-  git \
-  autofs \
-  fonts-font-awesome \
-  htop \
-  tmux \
+  xdotool \
   zsh \
   zsh-autosuggestions \
   zsh-syntax-highlighting \
-  ffmpegthumbnailer \
-  nemo-media-columns \
-  
+
+#File Management Preferences
+Default View to List View
+
+#To enable double-click renaming of files and folders in Linux Mint, 
+#Nemo setting for double-click rename on LMDE
+gsettings set org.nemo.preferences click-policy 'double'
+
+#Verify the new setting
+gsettings get org.nemo.preferences click-policy
+
+Executable Text File
+Change to: View execcutable text files when they are opened
+
+Toolbar settings
+Enable the following Visible Buttons:
+Previous, Next, Up, Refresh, Computer, Home, Lovation entry toggle, Open in terminal, New Folder, Search, Icon view and List view
+
+Context Menus Enable the following
+For Selection
+Open, Open in New Tab, Open in New Window, Scripts, Cut, Copy, Paste, Pin, Favorite, Make Likn, Renoam, Copy to, Move to, Open in Terminal, Open as Root, Move to Trash and Properties
+
+#Customize Data and time Display
+Format 
+Use 24h clock = enable
+Display the date = enable
+First day of week = Sunday
+
+
+
 
 # Download and install JDownloader
 sudo nala install openjdk-21-jre
@@ -108,12 +140,6 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 
 echo "All steps completed. Restart your terminal or run 'zsh' to begin."
 
-#To enable double-click renaming of files and folders in Linux Mint, 
-#Nemo setting for double-click rename on LMDE
-gsettings set org.nemo.preferences click-policy 'double'
-
-#Verify the new setting
-gsettings get org.nemo.preferences click-policy
 
 #Add nemo-mediainfo-tab - Download into Downloads without changing directory
 wget -P ~/Downloads https://github.com/linux-man/nemo-mediainfo-tab/releases/download/v1.0.4/nemo-mediainfo-tab_1.0.4_all.deb
@@ -121,7 +147,7 @@ wget -P ~/Downloads https://github.com/linux-man/nemo-mediainfo-tab/releases/dow
 #Install the nemo-mediainfo-tab file from Downloads
 sudo dpkg -i ~/Downloads/nemo-mediainfo-tab_1.0.4_all.deb
 sudo nala install -f 
-sudo apt --fix-broken install
+sudo nala --fix-broken install
 
 
 #Restart Nemo to apply
@@ -137,10 +163,11 @@ Command may disrupt existing ssh connections. Proceed with operation (y|n)?
 sudo ufw status verbose
 
 Wallpaper https://alphacoders.com/
+https://wall.alphacoders.com/big.php?i=1354199
+https://wall.alphacoders.com/big.php?i=1372162
+https://wall.alphacoders.com/big.php?i=1405430
 https://www.youtube.com/watch?v=Q_Uoe5H4ORs
 
-
-# Setup Local Firewall
 
 # Videos to watch after installing
 https://www.youtube.com/watch?v=TrbB0WwywOQ
