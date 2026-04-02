@@ -5,20 +5,19 @@ set -o pipefail
 ###############################################################################
 # LMDE / Ubuntu Interactive Workstation Setup Script
 # - Supports LMDE 6/7 and Ubuntu
-# - Safest execution order
-# - Pre-flight checks
-# - Repo validation
-# - Docker repo setup/validation
-# - Vendor apps + Flatpak apps
-# - Fonts, Nemo, Zsh, desktop prefs
+# - Safe execution order
+# - Live progress output for long-running operations
+# - Spinner for quiet operations
+# - Persistent colored menu status
+# - Reset menu status support
 # - WinBoat prerequisites + install
-# - Validation report
 ###############################################################################
 
 SCRIPT_NAME="$(basename "$0")"
 LOG_FILE="${HOME}/workstation_setup.log"
 REPORT_FILE="${HOME}/workstation_setup_report.txt"
 FAILED_FILE="${HOME}/workstation_failed_items.txt"
+STATUS_FILE="${HOME}/.workstation_setup_status"
 DOWNLOAD_DIR="${HOME}/Downloads"
 STARTING_USER="${SUDO_USER:-$USER}"
 STARTING_HOME="$(getent passwd "$STARTING_USER" | cut -d: -f6 2>/dev/null)"
@@ -49,6 +48,8 @@ IS_UBUNTU=false
 IS_SUPPORTED_OS=false
 JAVA_PKG="default-jre"
 
+declare -A SECTION_STATUS
+
 mkdir -p "$(dirname "$LOG_FILE")"
 touch "$LOG_FILE"
 : > "$FAILED_FILE"
@@ -69,6 +70,76 @@ error()   { log "ERROR" "$*"; printf "${RED}[ERROR]${NC} %s\n" "$*"; }
 record_failure() {
   local item="$1"
   echo "$item" >> "$FAILED_FILE"
+}
+
+# ---------- Section Status ----------
+init_section_status() {
+  local i
+  for i in $(seq 0 15); do
+    SECTION_STATUS[$i]="pending"
+  done
+}
+
+save_section_status() {
+  : > "$STATUS_FILE"
+  local i
+  for i in $(seq 0 15); do
+    echo "${i}=${SECTION_STATUS[$i]:-pending}" >> "$STATUS_FILE"
+  done
+}
+
+load_section_status() {
+  init_section_status
+  [[ -f "$STATUS_FILE" ]] || return 0
+
+  local line key value
+  while IFS='=' read -r key value; do
+    [[ "$key" =~ ^[0-9]+$ ]] || continue
+    SECTION_STATUS[$key]="$value"
+  done < "$STATUS_FILE"
+}
+
+reset_section_status() {
+  init_section_status
+  save_section_status
+  success "All section statuses have been reset to pending."
+}
+
+format_menu_item() {
+  local number="$1"
+  local label="$2"
+  local status="${SECTION_STATUS[$number]:-pending}"
+
+  case "$status" in
+    complete)
+      printf "${GREEN}%3s) %s${NC}\n" "$number" "$label"
+      ;;
+    failed)
+      printf "${RED}%3s) %s${NC}\n" "$number" "$label"
+      ;;
+    running)
+      printf "${YELLOW}%3s) %s${NC}\n" "$number" "$label"
+      ;;
+    *)
+      printf "%3s) %s\n" "$number" "$label"
+      ;;
+  esac
+}
+
+run_section() {
+  local section_number="$1"
+  local function_name="$2"
+
+  SECTION_STATUS["$section_number"]="running"
+  save_section_status
+
+  if "$function_name"; then
+    SECTION_STATUS["$section_number"]="complete"
+  else
+    SECTION_STATUS["$section_number"]="failed"
+  fi
+
+  save_section_status
 }
 
 # ---------- Core Helpers ----------
@@ -148,6 +219,100 @@ sudo_run() {
   fi
 }
 
+run_cmd_live() {
+  local desc="$1"
+  shift
+  info "$desc"
+  echo "------------------------------------------------------------"
+  if "$@" 2>&1 | tee -a "$LOG_FILE"; then
+    echo "------------------------------------------------------------"
+    success "$desc"
+    return 0
+  else
+    echo "------------------------------------------------------------"
+    error "$desc"
+    return 1
+  fi
+}
+
+sudo_run_live() {
+  local desc="$1"
+  shift
+  info "$desc"
+  echo "------------------------------------------------------------"
+  if sudo "$@" 2>&1 | tee -a "$LOG_FILE"; then
+    echo "------------------------------------------------------------"
+    success "$desc"
+    return 0
+  else
+    echo "------------------------------------------------------------"
+    error "$desc"
+    return 1
+  fi
+}
+
+run_with_spinner() {
+  local desc="$1"
+  shift
+
+  info "$desc"
+  (
+    "$@" >>"$LOG_FILE" 2>&1
+  ) &
+  local pid=$!
+
+  local spin='-\|/'
+  local i=0
+  while kill -0 "$pid" 2>/dev/null; do
+    i=$(( (i + 1) % 4 ))
+    printf "\r[%c] %s" "${spin:$i:1}" "$desc"
+    sleep 0.2
+  done
+
+  wait "$pid"
+  local rc=$?
+  printf "\r"
+
+  if [[ $rc -eq 0 ]]; then
+    success "$desc"
+    return 0
+  else
+    error "$desc"
+    return 1
+  fi
+}
+
+sudo_run_with_spinner() {
+  local desc="$1"
+  shift
+
+  info "$desc"
+  (
+    sudo "$@" >>"$LOG_FILE" 2>&1
+  ) &
+  local pid=$!
+
+  local spin='-\|/'
+  local i=0
+  while kill -0 "$pid" 2>/dev/null; do
+    i=$(( (i + 1) % 4 ))
+    printf "\r[%c] %s" "${spin:$i:1}" "$desc"
+    sleep 0.2
+  done
+
+  wait "$pid"
+  local rc=$?
+  printf "\r"
+
+  if [[ $rc -eq 0 ]]; then
+    success "$desc"
+    return 0
+  else
+    error "$desc"
+    return 1
+  fi
+}
+
 pkg_installed() {
   dpkg -s "$1" >/dev/null 2>&1
 }
@@ -186,13 +351,9 @@ clone_or_update_repo() {
   local target_dir="$2"
 
   if [[ -d "$target_dir/.git" ]]; then
-    run_as_user git -C "$target_dir" pull --ff-only >>"$LOG_FILE" 2>&1 \
-      && success "Updated $(basename "$target_dir")" \
-      || warn "Could not update $(basename "$target_dir")"
+    run_with_spinner "Updating $(basename "$target_dir")" run_as_user git -C "$target_dir" pull --ff-only
   else
-    run_as_user git clone --depth 1 "$repo_url" "$target_dir" >>"$LOG_FILE" 2>&1 \
-      && success "Cloned $(basename "$target_dir")" \
-      || warn "Could not clone $(basename "$target_dir")"
+    run_with_spinner "Cloning $(basename "$target_dir")" run_as_user git clone --depth 1 "$repo_url" "$target_dir"
   fi
 }
 
@@ -270,34 +431,34 @@ print_detected_environment() {
 # ---------- Package Manager Wrappers ----------
 pkg_update() {
   if command_exists nala; then
-    sudo nala update >>"$LOG_FILE" 2>&1
+    sudo nala update 2>&1 | tee -a "$LOG_FILE"
   else
-    sudo apt-get update >>"$LOG_FILE" 2>&1
+    sudo apt-get update 2>&1 | tee -a "$LOG_FILE"
   fi
 }
 
 pkg_upgrade_full() {
   if command_exists nala; then
-    sudo nala upgrade -y >>"$LOG_FILE" 2>&1
+    sudo nala upgrade -y 2>&1 | tee -a "$LOG_FILE"
   else
-    sudo apt-get -y full-upgrade >>"$LOG_FILE" 2>&1
+    sudo apt-get -y full-upgrade 2>&1 | tee -a "$LOG_FILE"
   fi
 }
 
 pkg_install() {
   if command_exists nala; then
-    sudo nala install -y "$@" >>"$LOG_FILE" 2>&1
+    sudo nala install -y "$@" 2>&1 | tee -a "$LOG_FILE"
   else
-    sudo apt-get install -y "$@" >>"$LOG_FILE" 2>&1
+    sudo apt-get install -y "$@" 2>&1 | tee -a "$LOG_FILE"
   fi
 }
 
 pkg_fix_broken() {
   if command_exists nala; then
-    sudo nala install -f -y >>"$LOG_FILE" 2>&1 || true
-    sudo nala --fix-broken install -y >>"$LOG_FILE" 2>&1 || true
+    sudo nala install -f -y 2>&1 | tee -a "$LOG_FILE" || true
+    sudo nala --fix-broken install -y 2>&1 | tee -a "$LOG_FILE" || true
   else
-    sudo apt-get install -f -y >>"$LOG_FILE" 2>&1 || true
+    sudo apt-get install -f -y 2>&1 | tee -a "$LOG_FILE" || true
   fi
 }
 
@@ -468,7 +629,7 @@ install_flatpak_app() {
   fi
 
   info "Installing Flatpak app: $label"
-  if sudo flatpak install --system -y flathub "$app_id" >>"$LOG_FILE" 2>&1; then
+  if sudo flatpak install --system -y flathub "$app_id" 2>&1 | tee -a "$LOG_FILE"; then
     success "Installed (Flatpak): $label"
     return 0
   else
@@ -518,9 +679,7 @@ install_latest_winboat_deb() {
   deb_file="${DOWNLOAD_DIR}/$(basename "$deb_url")"
   ensure_dir "$DOWNLOAD_DIR"
 
-  info "Downloading WinBoat package..."
-  if ! run_as_user wget -O "$deb_file" "$deb_url" >>"$LOG_FILE" 2>&1; then
-    error "Failed to download WinBoat package"
+  if ! run_with_spinner "Downloading WinBoat package" run_as_user wget -O "$deb_file" "$deb_url"; then
     record_failure "winboat-download"
     return 1
   fi
@@ -601,29 +760,25 @@ section_1_system_update() {
   show_section_header "Section 1 - System Update & Upgrade"
 
   sudo_run "Allow apt release info version changes" bash -c \
-    'echo '\''Acquire::AllowReleaseInfoChange "true";'\'' > /etc/apt/apt.conf.d/99releaseinfo'
+    'echo '\''Acquire::AllowReleaseInfoChange "true";'\'' > /etc/apt/apt.conf.d/99releaseinfo' || return 1
 
-  sudo_run "Update apt package lists (allow release info version change)" \
-    apt-get update -o Acquire::AllowReleaseInfoChange::Version=true
+  sudo_run_live "Update apt package lists (allow release info version change)" \
+    apt-get update -o Acquire::AllowReleaseInfoChange::Version=true || return 1
 
-  sudo_run "Run apt full-upgrade" apt-get -y full-upgrade
+  sudo_run_live "Run apt full-upgrade" apt-get -y full-upgrade || return 1
 
   if ! command_exists nala; then
-    sudo_run "Install nala" apt-get install -y nala || true
+    sudo_run_live "Install nala" apt-get install -y nala || true
   else
     success "nala is already installed"
   fi
 
-  if pkg_update; then
-    success "Package lists updated."
+  if command_exists nala; then
+    sudo_run_live "Update package lists with nala" nala update || return 1
+    sudo_run_live "Upgrade packages with nala" nala upgrade -y || return 1
   else
-    warn "Package list update returned errors. Check repo configuration."
-  fi
-
-  if pkg_upgrade_full; then
-    success "System upgrade completed."
-  else
-    warn "System upgrade returned errors. Review $LOG_FILE."
+    sudo_run_live "Update package lists with apt-get" apt-get update || return 1
+    sudo_run_live "Upgrade packages with apt-get" apt-get -y full-upgrade || return 1
   fi
 }
 
@@ -701,6 +856,7 @@ section_2_core_and_vendor_apps() {
 
   setup_1password_repo || true
 
+  local pkg
   for pkg in "${apt_packages[@]}"; do
     if pkg_installed "$pkg"; then
       success "Already installed: $pkg"
@@ -759,7 +915,10 @@ section_2_core_and_vendor_apps() {
 
   if ((${#failed[@]} > 0)); then
     warn "Failed items: ${failed[*]}"
+    return 1
   fi
+
+  return 0
 }
 
 # ---------- Section 3 ----------
@@ -793,7 +952,10 @@ section_3_flatpak_apps() {
   echo "  Failed Flatpaks : ${#failed[@]}"
   if ((${#failed[@]} > 0)); then
     warn "Failed Flatpaks: ${failed[*]}"
+    return 1
   fi
+
+  return 0
 }
 
 # ---------- Section 4 ----------
@@ -812,18 +974,18 @@ section_4_docker_repo() {
     warn "Architecture $ARCH may not be supported by Docker's official packages."
   fi
 
-  sudo_run "Install Docker repo prerequisites" apt-get install -y ca-certificates curl gnupg
+  sudo_run_live "Install Docker repo prerequisites" apt-get install -y ca-certificates curl gnupg || return 1
 
   local conflicting=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
   local pkg
   for pkg in "${conflicting[@]}"; do
     if pkg_installed "$pkg"; then
       warn "Removing conflicting package: $pkg"
-      sudo apt-get remove -y "$pkg" >>"$LOG_FILE" 2>&1 || true
+      sudo apt-get remove -y "$pkg" 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
 
-  sudo_run "Create /etc/apt/keyrings" install -m 0755 -d /etc/apt/keyrings
+  sudo_run "Create /etc/apt/keyrings" install -m 0755 -d /etc/apt/keyrings || return 1
 
   local docker_gpg="/etc/apt/keyrings/docker.asc"
   local docker_uri
@@ -833,8 +995,8 @@ section_4_docker_repo() {
     docker_uri="https://download.docker.com/linux/debian"
   fi
 
-  sudo_run "Download Docker GPG key" curl -fsSL "${docker_uri}/gpg" -o "$docker_gpg"
-  sudo_run "Set Docker GPG key permissions" chmod a+r "$docker_gpg"
+  sudo_run_with_spinner "Download Docker GPG key" curl -fsSL "${docker_uri}/gpg" -o "$docker_gpg" || return 1
+  sudo_run "Set Docker GPG key permissions" chmod a+r "$docker_gpg" || return 1
 
   info "Writing Docker repo source for ${DOCKER_DISTRO}:${APT_CODENAME}"
   sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null <<EOF
@@ -851,13 +1013,10 @@ EOF
     warn "Disabled legacy docker.list to avoid duplicate/conflicting entries."
   fi
 
-  if sudo apt-get update >>"$LOG_FILE" 2>&1; then
-    success "Docker repository metadata updated successfully."
-  else
-    error "Docker repository update failed. Check $LOG_FILE."
+  sudo_run_live "Refresh apt metadata for Docker repo" apt-get update || {
     record_failure "docker-repo-update"
     return 1
-  fi
+  }
 
   info "Docker repo file:"
   sudo cat /etc/apt/sources.list.d/docker.sources | tee -a "$LOG_FILE"
@@ -869,25 +1028,24 @@ EOF
   fi
 
   if confirm "Install Docker Engine packages now?" "N"; then
-    if sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >>"$LOG_FILE" 2>&1; then
-      success "Docker packages installed."
-      sudo systemctl enable --now docker >>"$LOG_FILE" 2>&1 || true
-      success "Docker service enabled/started (if supported)."
-
-      if confirm "Add ${STARTING_USER} to the docker group?" "Y"; then
-        sudo groupadd docker >>"$LOG_FILE" 2>&1 || true
-        sudo usermod -aG docker "$STARTING_USER" >>"$LOG_FILE" 2>&1 || true
-        warn "You may need to log out and back in for docker group membership to apply."
-      fi
-
-      if [[ -d "${STARTING_HOME}/.docker" ]]; then
-        sudo chown "$STARTING_USER":"$STARTING_USER" "${STARTING_HOME}/.docker" -R >>"$LOG_FILE" 2>&1 || true
-        sudo chmod g+rwx "${STARTING_HOME}/.docker" -R >>"$LOG_FILE" 2>&1 || true
-      fi
-    else
-      error "Docker package installation failed."
+    sudo_run_live "Install Docker Engine packages" \
+      apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || {
       record_failure "docker-engine"
       return 1
+    }
+
+    sudo systemctl enable --now docker >>"$LOG_FILE" 2>&1 || true
+    success "Docker service enabled/started (if supported)."
+
+    if confirm "Add ${STARTING_USER} to the docker group?" "Y"; then
+      sudo groupadd docker >>"$LOG_FILE" 2>&1 || true
+      sudo usermod -aG docker "$STARTING_USER" >>"$LOG_FILE" 2>&1 || true
+      warn "You may need to log out and back in for docker group membership to apply."
+    fi
+
+    if [[ -d "${STARTING_HOME}/.docker" ]]; then
+      sudo chown "$STARTING_USER":"$STARTING_USER" "${STARTING_HOME}/.docker" -R >>"$LOG_FILE" 2>&1 || true
+      sudo chmod g+rwx "${STARTING_HOME}/.docker" -R >>"$LOG_FILE" 2>&1 || true
     fi
   else
     warn "Skipped Docker package installation. Repo is configured."
@@ -911,23 +1069,20 @@ section_5_install_fonts() {
   if pkg_installed ttf-mscorefonts-installer; then
     success "Already installed: ttf-mscorefonts-installer"
   else
-    info "Installing Microsoft core fonts..."
-    if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ttf-mscorefonts-installer >>"$LOG_FILE" 2>&1; then
-      success "Installed: ttf-mscorefonts-installer"
-    else
+    sudo_run_live "Installing Microsoft core fonts" env DEBIAN_FRONTEND=noninteractive apt-get install -y ttf-mscorefonts-installer || {
       warn "Failed to install ttf-mscorefonts-installer. On some systems this requires contrib/multiverse repositories."
       record_failure "ttf-mscorefonts-installer"
-    fi
+    }
   fi
 
-  info "Installing Meslo Nerd Font..."
-  run_cmd "Download Meslo Nerd Font archive" wget -O "$zip_file" "$meslo_url" || {
+  run_cmd_live "Download Meslo Nerd Font archive" wget -O "$zip_file" "$meslo_url" || {
     record_failure "Meslo Nerd Font"
     return 1
   }
-  sudo_run "Create Meslo font directory" mkdir -p "$fonts_dir"
-  sudo_run "Extract Meslo Nerd Font archive" unzip -o "$zip_file" -d "$fonts_dir"
-  sudo_run "Refresh font cache" fc-cache -fv
+
+  sudo_run "Create Meslo font directory" mkdir -p "$fonts_dir" || return 1
+  sudo_run_live "Extract Meslo Nerd Font archive" unzip -o "$zip_file" -d "$fonts_dir" || return 1
+  sudo_run_with_spinner "Refresh font cache" fc-cache -fv || return 1
   success "Fonts installation section completed."
 }
 
@@ -975,6 +1130,7 @@ section_7_zsh_default_shell() {
     else
       warn "Could not change default shell automatically. You may need to run: chsh -s $zsh_path"
       record_failure "chsh-zsh"
+      return 1
     fi
   fi
 
@@ -993,13 +1149,12 @@ section_8_oh_my_zsh_and_plugins() {
     info "Installing Oh-My-Zsh unattended..."
     run_as_user_shell \
       'RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"' \
-      >>"$LOG_FILE" 2>&1 \
-      && success "Installed Oh-My-Zsh" \
-      || {
-        error "Oh-My-Zsh installation failed"
-        record_failure "oh-my-zsh"
-        return 1
-      }
+      >>"$LOG_FILE" 2>&1 || {
+      error "Oh-My-Zsh installation failed"
+      record_failure "oh-my-zsh"
+      return 1
+    }
+    success "Installed Oh-My-Zsh"
   else
     success "Oh-My-Zsh is already installed"
   fi
@@ -1019,7 +1174,8 @@ section_8_oh_my_zsh_and_plugins() {
   clone_or_update_repo "https://github.com/zdharma-continuum/fast-syntax-highlighting.git" \
     "${zsh_custom}/plugins/fast-syntax-highlighting"
 
-  clone_or_update_repo "https://github.com/marlonrichert/zsh-autocomplete.git" \
+  clone_or_updateRepo="https://github.com/marlonrichert/zsh-autocomplete.git"
+  clone_or_update_repo "$clone_or_updateRepo" \
     "${zsh_custom}/plugins/zsh-autocomplete"
 
   touch "$zshrc"
@@ -1087,8 +1243,6 @@ section_9_date_time() {
   info "Section 9 summary:"
   echo "  Applied settings : $applied_count"
   echo "  Skipped settings : $skipped_count"
-
-  success "Date and time preferences section completed."
 }
 
 # ---------- Section 10 ----------
@@ -1196,7 +1350,6 @@ section_11_nemo_preferences() {
   echo "  Skipped settings : $skipped_count"
 
   run_as_user_shell "nemo -q >/dev/null 2>&1 || true"
-  success "Nemo preferences section completed."
 }
 
 # ---------- Section 12 ----------
@@ -1221,18 +1374,15 @@ section_12_nemo_enhancements() {
   ensure_dir "$DOWNLOAD_DIR"
 
   if [[ ! -f "$deb_file" ]]; then
-    run_as_user wget -O "$deb_file" "$deb_url" >>"$LOG_FILE" 2>&1 \
-      && success "Downloaded nemo-mediainfo-tab to $deb_file" \
-      || {
-        error "Download failed: $deb_url"
-        record_failure "nemo-mediainfo-tab"
-        return 1
-      }
+    run_with_spinner "Downloading nemo-mediainfo-tab" run_as_user wget -O "$deb_file" "$deb_url" || {
+      record_failure "nemo-mediainfo-tab"
+      return 1
+    }
   else
     success "Installer already downloaded: $deb_file"
   fi
 
-  sudo_run "Install nemo-mediainfo-tab package" dpkg -i "$deb_file" || true
+  sudo_run_with_spinner "Install nemo-mediainfo-tab package" dpkg -i "$deb_file" || true
   pkg_fix_broken
   run_as_user_shell "nemo -q >/dev/null 2>&1 || true"
   success "Nemo enhancement installation complete."
@@ -1359,7 +1509,7 @@ section_14_jdownloader() {
 
   if [[ -n "${JDOWNLOADER_URL:-}" ]]; then
     info "Using JDOWNLOADER_URL from environment"
-    if run_as_user wget -O "$installer" "$JDOWNLOADER_URL" >>"$LOG_FILE" 2>&1; then
+    if run_with_spinner "Downloading JDownloader installer" run_as_user wget -O "$installer" "$JDOWNLOADER_URL"; then
       success "Downloaded JDownloader installer"
     else
       error "Direct JDownloader download failed"
@@ -1479,37 +1629,23 @@ section_15_validation_report() {
 }
 
 # ---------- Menu ----------
-run_section_prompt() {
-  local section_num="$1"
-  local section_name="$2"
-  local function_name="$3"
-
-  echo
-  printf "${BOLD}%s${NC}\n" "$section_num) $section_name"
-  if confirm "Run this section?" "Y"; then
-    "$function_name"
-  else
-    warn "Skipped: $section_name"
-  fi
-}
-
 run_all_sections() {
-  run_section_prompt 0  "Pre-Flight Checks"                    section_0_preflight
-  run_section_prompt 1  "System Update & Upgrade"              section_1_system_update
-  run_section_prompt 2  "Core Packages and Vendor Apps"        section_2_core_and_vendor_apps
-  run_section_prompt 3  "Flatpak Applications"                 section_3_flatpak_apps
-  run_section_prompt 4  "Docker Repo Setup / Validation"       section_4_docker_repo
-  run_section_prompt 5  "Fonts Installation"                   section_5_install_fonts
-  run_section_prompt 6  "Set Monospace Font"                   section_6_set_monospace_font
-  run_section_prompt 7  "ZSH Default Shell Setup"              section_7_zsh_default_shell
-  run_section_prompt 8  "Oh-My-Zsh + Powerlevel10k + Plugins"  section_8_oh_my_zsh_and_plugins
-  run_section_prompt 9  "Date and Time Preferences"            section_9_date_time
-  run_section_prompt 10 "Firewall (UFW)"                       section_10_firewall
-  run_section_prompt 11 "Nemo File Manager Preferences"        section_11_nemo_preferences
-  run_section_prompt 12 "Nemo Enhancements"                    section_12_nemo_enhancements
-  run_section_prompt 13 "WinBoat"                              section_13_winboat
-  run_section_prompt 14 "JDownloader"                          section_14_jdownloader
-  run_section_prompt 15 "Validation Report"                    section_15_validation_report
+  if confirm "Run Section 0 - Pre-Flight Checks?" "Y"; then run_section 0 section_0_preflight; fi
+  if confirm "Run Section 1 - System Update & Upgrade?" "Y"; then run_section 1 section_1_system_update; fi
+  if confirm "Run Section 2 - Core Packages and Vendor Apps?" "Y"; then run_section 2 section_2_core_and_vendor_apps; fi
+  if confirm "Run Section 3 - Flatpak Applications?" "Y"; then run_section 3 section_3_flatpak_apps; fi
+  if confirm "Run Section 4 - Docker Repo Setup / Validation?" "Y"; then run_section 4 section_4_docker_repo; fi
+  if confirm "Run Section 5 - Fonts Installation?" "Y"; then run_section 5 section_5_install_fonts; fi
+  if confirm "Run Section 6 - Set Monospace Font?" "Y"; then run_section 6 section_6_set_monospace_font; fi
+  if confirm "Run Section 7 - ZSH Default Shell Setup?" "Y"; then run_section 7 section_7_zsh_default_shell; fi
+  if confirm "Run Section 8 - Oh-My-Zsh + Powerlevel10k + Plugins?" "Y"; then run_section 8 section_8_oh_my_zsh_and_plugins; fi
+  if confirm "Run Section 9 - Date and Time Preferences?" "Y"; then run_section 9 section_9_date_time; fi
+  if confirm "Run Section 10 - Firewall (UFW)?" "Y"; then run_section 10 section_10_firewall; fi
+  if confirm "Run Section 11 - Nemo File Manager Preferences?" "Y"; then run_section 11 section_11_nemo_preferences; fi
+  if confirm "Run Section 12 - Nemo Enhancements?" "Y"; then run_section 12 section_12_nemo_enhancements; fi
+  if confirm "Run Section 13 - WinBoat?" "Y"; then run_section 13 section_13_winboat; fi
+  if confirm "Run Section 14 - JDownloader?" "Y"; then run_section 14 section_14_jdownloader; fi
+  if confirm "Run Section 15 - Validation Report?" "Y"; then run_section 15 section_15_validation_report; fi
 }
 
 show_menu() {
@@ -1518,24 +1654,28 @@ show_menu() {
   echo -e "${CYAN}Log file   : ${LOG_FILE}${NC}"
   echo -e "${CYAN}Report file: ${REPORT_FILE}${NC}"
   echo
-  echo "  0) Section 0  - Pre-Flight Checks"
-  echo "  1) Section 1  - System Update & Upgrade"
-  echo "  2) Section 2  - Core Packages and Vendor Apps"
-  echo "  3) Section 3  - Flatpak Applications"
-  echo "  4) Section 4  - Docker Repo Setup / Validation"
-  echo "  5) Section 5  - Fonts Installation"
-  echo "  6) Section 6  - Set Monospace Font"
-  echo "  7) Section 7  - ZSH Default Shell Setup"
-  echo "  8) Section 8  - Oh-My-Zsh + Powerlevel10k + Plugins"
-  echo "  9) Section 9  - Date and Time Preferences"
-  echo " 10) Section 10 - Firewall (UFW)"
-  echo " 11) Section 11 - Nemo File Manager Preferences"
-  echo " 12) Section 12 - Nemo Enhancements"
-  echo " 13) Section 13 - WinBoat"
-  echo " 14) Section 14 - JDownloader"
-  echo " 15) Section 15 - Validation Report"
+  echo -e "${GREEN}Green${NC} = completed   ${RED}Red${NC} = failed   ${YELLOW}Yellow${NC} = running"
+  echo
+
+  format_menu_item 0  "Section 0  - Pre-Flight Checks"
+  format_menu_item 1  "Section 1  - System Update & Upgrade"
+  format_menu_item 2  "Section 2  - Core Packages and Vendor Apps"
+  format_menu_item 3  "Section 3  - Flatpak Applications"
+  format_menu_item 4  "Section 4  - Docker Repo Setup / Validation"
+  format_menu_item 5  "Section 5  - Fonts Installation"
+  format_menu_item 6  "Section 6  - Set Monospace Font"
+  format_menu_item 7  "Section 7  - ZSH Default Shell Setup"
+  format_menu_item 8  "Section 8  - Oh-My-Zsh + Powerlevel10k + Plugins"
+  format_menu_item 9  "Section 9  - Date and Time Preferences"
+  format_menu_item 10 "Section 10 - Firewall (UFW)"
+  format_menu_item 11 "Section 11 - Nemo File Manager Preferences"
+  format_menu_item 12 "Section 12 - Nemo Enhancements"
+  format_menu_item 13 "Section 13 - WinBoat"
+  format_menu_item 14 "Section 14 - JDownloader"
+  format_menu_item 15 "Section 15 - Validation Report"
   echo " 16) Run ALL sections (prompt before each)"
-  echo " 17) Exit"
+  echo " 17) Reset all section statuses to pending"
+  echo " 18) Exit"
   echo
 }
 
@@ -1543,6 +1683,7 @@ main() {
   require_sudo
   detect_os
   ensure_dir "$DOWNLOAD_DIR"
+  load_section_status
 
   info "Starting $SCRIPT_NAME as user: $STARTING_USER"
   info "Home detected: $STARTING_HOME"
@@ -1550,27 +1691,28 @@ main() {
 
   while true; do
     show_menu
-    read -r -p "Select an option [0-17]: " choice
+    read -r -p "Select an option [0-18]: " choice
 
     case "$choice" in
-      0)  section_0_preflight; press_enter ;;
-      1)  section_1_system_update; press_enter ;;
-      2)  section_2_core_and_vendor_apps; press_enter ;;
-      3)  section_3_flatpak_apps; press_enter ;;
-      4)  section_4_docker_repo; press_enter ;;
-      5)  section_5_install_fonts; press_enter ;;
-      6)  section_6_set_monospace_font; press_enter ;;
-      7)  section_7_zsh_default_shell; press_enter ;;
-      8)  section_8_oh_my_zsh_and_plugins; press_enter ;;
-      9)  section_9_date_time; press_enter ;;
-      10) section_10_firewall; press_enter ;;
-      11) section_11_nemo_preferences; press_enter ;;
-      12) section_12_nemo_enhancements; press_enter ;;
-      13) section_13_winboat; press_enter ;;
-      14) section_14_jdownloader; press_enter ;;
-      15) section_15_validation_report; press_enter ;;
+      0)  run_section 0 section_0_preflight; press_enter ;;
+      1)  run_section 1 section_1_system_update; press_enter ;;
+      2)  run_section 2 section_2_core_and_vendor_apps; press_enter ;;
+      3)  run_section 3 section_3_flatpak_apps; press_enter ;;
+      4)  run_section 4 section_4_docker_repo; press_enter ;;
+      5)  run_section 5 section_5_install_fonts; press_enter ;;
+      6)  run_section 6 section_6_set_monospace_font; press_enter ;;
+      7)  run_section 7 section_7_zsh_default_shell; press_enter ;;
+      8)  run_section 8 section_8_oh_my_zsh_and_plugins; press_enter ;;
+      9)  run_section 9 section_9_date_time; press_enter ;;
+      10) run_section 10 section_10_firewall; press_enter ;;
+      11) run_section 11 section_11_nemo_preferences; press_enter ;;
+      12) run_section 12 section_12_nemo_enhancements; press_enter ;;
+      13) run_section 13 section_13_winboat; press_enter ;;
+      14) run_section 14 section_14_jdownloader; press_enter ;;
+      15) run_section 15 section_15_validation_report; press_enter ;;
       16) run_all_sections; press_enter ;;
-      17) success "Exiting."; exit 0 ;;
+      17) reset_section_status; press_enter ;;
+      18) success "Exiting."; exit 0 ;;
       *)  warn "Invalid selection."; press_enter ;;
     esac
   done
