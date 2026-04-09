@@ -5,12 +5,16 @@ set -o pipefail
 ###############################################################################
 # LMDE / Ubuntu Interactive Workstation Setup Script
 # - Supports LMDE 6/7 and Ubuntu
-# - Safe execution order
-# - Live progress output for long-running operations
-# - Spinner for quiet operations
+# - Live progress for package operations
+# - Automatic dpkg recovery
+# - APT IPv4 fallback
 # - Persistent colored menu status
-# - Reset menu status support
+# - Corrected package install handling
+# - Corrected Docker repo setup handling
+# - Vendor apps + Flatpak apps
+# - Fonts, Nemo, Zsh, desktop prefs
 # - WinBoat prerequisites + install
+# - Validation report
 ###############################################################################
 
 SCRIPT_NAME="$(basename "$0")"
@@ -75,34 +79,26 @@ record_failure() {
 # ---------- Section Status ----------
 init_section_status() {
   local i
-  for i in $(seq 0 15); do
+  for i in {0..15}; do
     SECTION_STATUS[$i]="pending"
   done
+}
+
+load_section_status() {
+  if [[ -f "$STATUS_FILE" ]]; then
+    while IFS='=' read -r key value; do
+      [[ "$key" =~ ^[0-9]+$ ]] || continue
+      SECTION_STATUS["$key"]="$value"
+    done < "$STATUS_FILE"
+  fi
 }
 
 save_section_status() {
   : > "$STATUS_FILE"
   local i
-  for i in $(seq 0 15); do
+  for i in {0..15}; do
     echo "${i}=${SECTION_STATUS[$i]:-pending}" >> "$STATUS_FILE"
   done
-}
-
-load_section_status() {
-  init_section_status
-  [[ -f "$STATUS_FILE" ]] || return 0
-
-  local line key value
-  while IFS='=' read -r key value; do
-    [[ "$key" =~ ^[0-9]+$ ]] || continue
-    SECTION_STATUS[$key]="$value"
-  done < "$STATUS_FILE"
-}
-
-reset_section_status() {
-  init_section_status
-  save_section_status
-  success "All section statuses have been reset to pending."
 }
 
 format_menu_item() {
@@ -222,6 +218,7 @@ sudo_run() {
 run_cmd_live() {
   local desc="$1"
   shift
+
   info "$desc"
   echo "------------------------------------------------------------"
   if "$@" 2>&1 | tee -a "$LOG_FILE"; then
@@ -238,6 +235,7 @@ run_cmd_live() {
 sudo_run_live() {
   local desc="$1"
   shift
+
   info "$desc"
   echo "------------------------------------------------------------"
   if sudo "$@" 2>&1 | tee -a "$LOG_FILE"; then
@@ -246,68 +244,6 @@ sudo_run_live() {
     return 0
   else
     echo "------------------------------------------------------------"
-    error "$desc"
-    return 1
-  fi
-}
-
-run_with_spinner() {
-  local desc="$1"
-  shift
-
-  info "$desc"
-  (
-    "$@" >>"$LOG_FILE" 2>&1
-  ) &
-  local pid=$!
-
-  local spin='-\|/'
-  local i=0
-  while kill -0 "$pid" 2>/dev/null; do
-    i=$(( (i + 1) % 4 ))
-    printf "\r[%c] %s" "${spin:$i:1}" "$desc"
-    sleep 0.2
-  done
-
-  wait "$pid"
-  local rc=$?
-  printf "\r"
-
-  if [[ $rc -eq 0 ]]; then
-    success "$desc"
-    return 0
-  else
-    error "$desc"
-    return 1
-  fi
-}
-
-sudo_run_with_spinner() {
-  local desc="$1"
-  shift
-
-  info "$desc"
-  (
-    sudo "$@" >>"$LOG_FILE" 2>&1
-  ) &
-  local pid=$!
-
-  local spin='-\|/'
-  local i=0
-  while kill -0 "$pid" 2>/dev/null; do
-    i=$(( (i + 1) % 4 ))
-    printf "\r[%c] %s" "${spin:$i:1}" "$desc"
-    sleep 0.2
-  done
-
-  wait "$pid"
-  local rc=$?
-  printf "\r"
-
-  if [[ $rc -eq 0 ]]; then
-    success "$desc"
-    return 0
-  else
     error "$desc"
     return 1
   fi
@@ -351,9 +287,13 @@ clone_or_update_repo() {
   local target_dir="$2"
 
   if [[ -d "$target_dir/.git" ]]; then
-    run_with_spinner "Updating $(basename "$target_dir")" run_as_user git -C "$target_dir" pull --ff-only
+    run_as_user git -C "$target_dir" pull --ff-only >>"$LOG_FILE" 2>&1 \
+      && success "Updated $(basename "$target_dir")" \
+      || warn "Could not update $(basename "$target_dir")"
   else
-    run_with_spinner "Cloning $(basename "$target_dir")" run_as_user git clone --depth 1 "$repo_url" "$target_dir"
+    run_as_user git clone --depth 1 "$repo_url" "$target_dir" >>"$LOG_FILE" 2>&1 \
+      && success "Cloned $(basename "$target_dir")" \
+      || warn "Could not clone $(basename "$target_dir")"
   fi
 }
 
@@ -460,12 +400,6 @@ pkg_fix_broken() {
   else
     sudo apt-get install -f -y 2>&1 | tee -a "$LOG_FILE" || true
   fi
-}
-
-apt_candidate_exists() {
-  local pkg="$1"
-  apt-cache policy "$pkg" 2>/dev/null | grep -q "Candidate:" && \
-    ! apt-cache policy "$pkg" 2>/dev/null | grep -q "Candidate: (none)"
 }
 
 # ---------- GSettings Helpers ----------
@@ -629,7 +563,7 @@ install_flatpak_app() {
   fi
 
   info "Installing Flatpak app: $label"
-  if sudo flatpak install --system -y flathub "$app_id" 2>&1 | tee -a "$LOG_FILE"; then
+  if sudo flatpak install --system -y flathub "$app_id" >>"$LOG_FILE" 2>&1; then
     success "Installed (Flatpak): $label"
     return 0
   else
@@ -679,7 +613,9 @@ install_latest_winboat_deb() {
   deb_file="${DOWNLOAD_DIR}/$(basename "$deb_url")"
   ensure_dir "$DOWNLOAD_DIR"
 
-  if ! run_with_spinner "Downloading WinBoat package" run_as_user wget -O "$deb_file" "$deb_url"; then
+  info "Downloading WinBoat package..."
+  if ! run_as_user wget -O "$deb_file" "$deb_url" >>"$LOG_FILE" 2>&1; then
+    error "Failed to download WinBoat package"
     record_failure "winboat-download"
     return 1
   fi
@@ -760,12 +696,19 @@ section_1_system_update() {
   show_section_header "Section 1 - System Update & Upgrade"
 
   sudo_run "Allow apt release info version changes" bash -c \
-    'echo '\''Acquire::AllowReleaseInfoChange "true";'\'' > /etc/apt/apt.conf.d/99releaseinfo' || return 1
+    'echo '\''Acquire::AllowReleaseInfoChange "true";'\'' > /etc/apt/apt.conf.d/99releaseinfo'
+
+  info "Recovering package manager state if needed..."
+  sudo dpkg --configure -a >>"$LOG_FILE" 2>&1 || true
+  sudo apt-get --fix-broken install -y >>"$LOG_FILE" 2>&1 || true
+
+  info "Forcing APT to use IPv4 for better repo reliability..."
+  echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 >/dev/null
 
   sudo_run_live "Update apt package lists (allow release info version change)" \
-    apt-get update -o Acquire::AllowReleaseInfoChange::Version=true || return 1
+    apt-get update -o Acquire::AllowReleaseInfoChange::Version=true
 
-  sudo_run_live "Run apt full-upgrade" apt-get -y full-upgrade || return 1
+  sudo_run_live "Run apt full-upgrade" apt-get -y full-upgrade
 
   if ! command_exists nala; then
     sudo_run_live "Install nala" apt-get install -y nala || true
@@ -774,11 +717,11 @@ section_1_system_update() {
   fi
 
   if command_exists nala; then
-    sudo_run_live "Update package lists with nala" nala update || return 1
-    sudo_run_live "Upgrade packages with nala" nala upgrade -y || return 1
+    sudo_run_live "Update package lists with nala" nala update
+    sudo_run_live "Upgrade packages with nala" nala upgrade -y
   else
-    sudo_run_live "Update package lists with apt-get" apt-get update || return 1
-    sudo_run_live "Upgrade packages with apt-get" apt-get -y full-upgrade || return 1
+    sudo_run_live "Update package lists with apt-get" apt-get update
+    sudo_run_live "Upgrade packages with apt-get" apt-get -y full-upgrade
   fi
 }
 
@@ -806,29 +749,16 @@ section_2_core_and_vendor_apps() {
     ncdu
     neovim
     nfs-common
-    numix-icon-theme
     "$JAVA_PKG"
-    preload
     p7zip-full
     remmina
     remmina-plugin-rdp
     ripgrep
     shellcheck
-    tealdeer
-    tlp
-    tlp-rdw
     tmux
-    transmission
     tree
-    fd-find
-    bat
-    vlc
-    unrar
-    wget
     xdotool
     zsh
-    zsh-autosuggestions
-    zsh-syntax-highlighting
     unzip
     ufw
     dconf-cli
@@ -840,13 +770,29 @@ section_2_core_and_vendor_apps() {
     timeshift
     okular
     pdfarranger
+  )
+
+  local optional_packages=(
+    numix-icon-theme
+    preload
+    tealdeer
+    tlp
+    tlp-rdw
+    transmission
+    fd-find
+    bat
+    vlc
+    unrar
     kodi
     notepadqq
+    zsh-autosuggestions
+    zsh-syntax-highlighting
   )
 
   local installed_now=()
   local skipped=()
   local failed=()
+  local optional_failed=()
 
   if pkg_update; then
     success "Package lists refreshed."
@@ -857,17 +803,12 @@ section_2_core_and_vendor_apps() {
   setup_1password_repo || true
 
   local pkg
+
+  info "Installing core packages..."
   for pkg in "${apt_packages[@]}"; do
     if pkg_installed "$pkg"; then
       success "Already installed: $pkg"
       skipped+=("$pkg")
-      continue
-    fi
-
-    if ! apt_candidate_exists "$pkg"; then
-      warn "Package not available from current repos: $pkg"
-      failed+=("$pkg")
-      record_failure "$pkg"
       continue
     fi
 
@@ -876,8 +817,27 @@ section_2_core_and_vendor_apps() {
       success "Installed: $pkg"
       installed_now+=("$pkg")
     else
-      error "Failed to install: $pkg"
+      warn "Failed to install: $pkg"
       failed+=("$pkg")
+      record_failure "$pkg"
+    fi
+  done
+
+  info "Installing optional packages..."
+  for pkg in "${optional_packages[@]}"; do
+    if pkg_installed "$pkg"; then
+      success "Already installed: $pkg"
+      skipped+=("$pkg")
+      continue
+    fi
+
+    info "Installing optional package: $pkg"
+    if pkg_install "$pkg"; then
+      success "Installed: $pkg"
+      installed_now+=("$pkg")
+    else
+      warn "Optional package not installed: $pkg"
+      optional_failed+=("$pkg")
       record_failure "$pkg"
     fi
   done
@@ -909,13 +869,17 @@ section_2_core_and_vendor_apps() {
 
   echo
   info "Section 2 summary:"
-  echo "  Installed now : ${#installed_now[@]}"
-  echo "  Already there : ${#skipped[@]}"
-  echo "  Failed        : ${#failed[@]}"
+  echo "  Installed now     : ${#installed_now[@]}"
+  echo "  Already there     : ${#skipped[@]}"
+  echo "  Core failed       : ${#failed[@]}"
+  echo "  Optional skipped  : ${#optional_failed[@]}"
 
   if ((${#failed[@]} > 0)); then
-    warn "Failed items: ${failed[*]}"
-    return 1
+    warn "Core package failures: ${failed[*]}"
+  fi
+
+  if ((${#optional_failed[@]} > 0)); then
+    warn "Optional package failures: ${optional_failed[*]}"
   fi
 
   return 0
@@ -952,10 +916,7 @@ section_3_flatpak_apps() {
   echo "  Failed Flatpaks : ${#failed[@]}"
   if ((${#failed[@]} > 0)); then
     warn "Failed Flatpaks: ${failed[*]}"
-    return 1
   fi
-
-  return 0
 }
 
 # ---------- Section 4 ----------
@@ -974,18 +935,21 @@ section_4_docker_repo() {
     warn "Architecture $ARCH may not be supported by Docker's official packages."
   fi
 
-  sudo_run_live "Install Docker repo prerequisites" apt-get install -y ca-certificates curl gnupg || return 1
+  sudo_run_live "Install Docker repo prerequisites" apt-get install -y ca-certificates curl gnupg
 
   local conflicting=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
   local pkg
   for pkg in "${conflicting[@]}"; do
     if pkg_installed "$pkg"; then
       warn "Removing conflicting package: $pkg"
-      sudo apt-get remove -y "$pkg" 2>&1 | tee -a "$LOG_FILE" || true
+      sudo apt-get remove -y "$pkg" >>"$LOG_FILE" 2>&1 || true
     fi
   done
 
-  sudo_run "Create /etc/apt/keyrings" install -m 0755 -d /etc/apt/keyrings || return 1
+  if ! sudo_run "Create /etc/apt/keyrings" install -m 0755 -d /etc/apt/keyrings; then
+    record_failure "docker-keyring-dir"
+    return 1
+  fi
 
   local docker_gpg="/etc/apt/keyrings/docker.asc"
   local docker_uri
@@ -995,8 +959,24 @@ section_4_docker_repo() {
     docker_uri="https://download.docker.com/linux/debian"
   fi
 
-  sudo_run_with_spinner "Download Docker GPG key" curl -fsSL "${docker_uri}/gpg" -o "$docker_gpg" || return 1
-  sudo_run "Set Docker GPG key permissions" chmod a+r "$docker_gpg" || return 1
+  sudo rm -f "$docker_gpg" >>"$LOG_FILE" 2>&1 || true
+
+  if ! sudo_run "Download Docker GPG key" curl -fsSL "${docker_uri}/gpg" -o "$docker_gpg"; then
+    error "Docker GPG key download failed. Repo setup cannot continue."
+    record_failure "docker-gpg-download"
+    return 1
+  fi
+
+  if [[ ! -s "$docker_gpg" ]]; then
+    error "Docker GPG key file was not created or is empty: $docker_gpg"
+    record_failure "docker-gpg-empty"
+    return 1
+  fi
+
+  if ! sudo_run "Set Docker GPG key permissions" chmod a+r "$docker_gpg"; then
+    record_failure "docker-gpg-perms"
+    return 1
+  fi
 
   info "Writing Docker repo source for ${DOCKER_DISTRO}:${APT_CODENAME}"
   sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null <<EOF
@@ -1013,10 +993,11 @@ EOF
     warn "Disabled legacy docker.list to avoid duplicate/conflicting entries."
   fi
 
-  sudo_run_live "Refresh apt metadata for Docker repo" apt-get update || {
+  if ! sudo_run_live "Update package lists after Docker repo setup" apt-get update; then
+    error "Docker repository metadata update failed."
     record_failure "docker-repo-update"
     return 1
-  }
+  fi
 
   info "Docker repo file:"
   sudo cat /etc/apt/sources.list.d/docker.sources | tee -a "$LOG_FILE"
@@ -1024,28 +1005,32 @@ EOF
   if apt-cache policy docker-ce | tee -a "$LOG_FILE" | grep -q "Candidate:"; then
     success "docker-ce package is visible from configured repositories."
   else
-    warn "docker-ce package policy check did not show a clear candidate."
+    error "docker-ce package is still not visible after repo setup."
+    record_failure "docker-package-visible"
+    return 1
   fi
 
   if confirm "Install Docker Engine packages now?" "N"; then
-    sudo_run_live "Install Docker Engine packages" \
-      apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || {
+    if sudo_run_live "Install Docker Engine packages" \
+      apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+
+      sudo systemctl enable --now docker >>"$LOG_FILE" 2>&1 || true
+      success "Docker service enabled/started (if supported)."
+
+      if confirm "Add ${STARTING_USER} to the docker group?" "Y"; then
+        sudo groupadd docker >>"$LOG_FILE" 2>&1 || true
+        sudo usermod -aG docker "$STARTING_USER" >>"$LOG_FILE" 2>&1 || true
+        warn "You may need to log out and back in for docker group membership to apply."
+      fi
+
+      if [[ -d "${STARTING_HOME}/.docker" ]]; then
+        sudo chown "$STARTING_USER":"$STARTING_USER" "${STARTING_HOME}/.docker" -R >>"$LOG_FILE" 2>&1 || true
+        sudo chmod g+rwx "${STARTING_HOME}/.docker" -R >>"$LOG_FILE" 2>&1 || true
+      fi
+    else
+      error "Docker package installation failed."
       record_failure "docker-engine"
       return 1
-    }
-
-    sudo systemctl enable --now docker >>"$LOG_FILE" 2>&1 || true
-    success "Docker service enabled/started (if supported)."
-
-    if confirm "Add ${STARTING_USER} to the docker group?" "Y"; then
-      sudo groupadd docker >>"$LOG_FILE" 2>&1 || true
-      sudo usermod -aG docker "$STARTING_USER" >>"$LOG_FILE" 2>&1 || true
-      warn "You may need to log out and back in for docker group membership to apply."
-    fi
-
-    if [[ -d "${STARTING_HOME}/.docker" ]]; then
-      sudo chown "$STARTING_USER":"$STARTING_USER" "${STARTING_HOME}/.docker" -R >>"$LOG_FILE" 2>&1 || true
-      sudo chmod g+rwx "${STARTING_HOME}/.docker" -R >>"$LOG_FILE" 2>&1 || true
     fi
   else
     warn "Skipped Docker package installation. Repo is configured."
@@ -1069,20 +1054,23 @@ section_5_install_fonts() {
   if pkg_installed ttf-mscorefonts-installer; then
     success "Already installed: ttf-mscorefonts-installer"
   else
-    sudo_run_live "Installing Microsoft core fonts" env DEBIAN_FRONTEND=noninteractive apt-get install -y ttf-mscorefonts-installer || {
+    info "Installing Microsoft core fonts..."
+    if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ttf-mscorefonts-installer 2>&1 | tee -a "$LOG_FILE"; then
+      success "Installed: ttf-mscorefonts-installer"
+    else
       warn "Failed to install ttf-mscorefonts-installer. On some systems this requires contrib/multiverse repositories."
       record_failure "ttf-mscorefonts-installer"
-    }
+    fi
   fi
 
-  run_cmd_live "Download Meslo Nerd Font archive" wget -O "$zip_file" "$meslo_url" || {
+  info "Installing Meslo Nerd Font..."
+  run_cmd "Download Meslo Nerd Font archive" wget -O "$zip_file" "$meslo_url" || {
     record_failure "Meslo Nerd Font"
     return 1
   }
-
-  sudo_run "Create Meslo font directory" mkdir -p "$fonts_dir" || return 1
-  sudo_run_live "Extract Meslo Nerd Font archive" unzip -o "$zip_file" -d "$fonts_dir" || return 1
-  sudo_run_with_spinner "Refresh font cache" fc-cache -fv || return 1
+  sudo_run "Create Meslo font directory" mkdir -p "$fonts_dir"
+  sudo_run "Extract Meslo Nerd Font archive" unzip -o "$zip_file" -d "$fonts_dir"
+  sudo_run "Refresh font cache" fc-cache -fv
   success "Fonts installation section completed."
 }
 
@@ -1149,12 +1137,13 @@ section_8_oh_my_zsh_and_plugins() {
     info "Installing Oh-My-Zsh unattended..."
     run_as_user_shell \
       'RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"' \
-      >>"$LOG_FILE" 2>&1 || {
-      error "Oh-My-Zsh installation failed"
-      record_failure "oh-my-zsh"
-      return 1
-    }
-    success "Installed Oh-My-Zsh"
+      >>"$LOG_FILE" 2>&1 \
+      && success "Installed Oh-My-Zsh" \
+      || {
+        error "Oh-My-Zsh installation failed"
+        record_failure "oh-my-zsh"
+        return 1
+      }
   else
     success "Oh-My-Zsh is already installed"
   fi
@@ -1174,8 +1163,7 @@ section_8_oh_my_zsh_and_plugins() {
   clone_or_update_repo "https://github.com/zdharma-continuum/fast-syntax-highlighting.git" \
     "${zsh_custom}/plugins/fast-syntax-highlighting"
 
-  clone_or_updateRepo="https://github.com/marlonrichert/zsh-autocomplete.git"
-  clone_or_update_repo "$clone_or_updateRepo" \
+  clone_or_update_repo "https://github.com/marlonrichert/zsh-autocomplete.git" \
     "${zsh_custom}/plugins/zsh-autocomplete"
 
   touch "$zshrc"
@@ -1243,6 +1231,8 @@ section_9_date_time() {
   info "Section 9 summary:"
   echo "  Applied settings : $applied_count"
   echo "  Skipped settings : $skipped_count"
+
+  success "Date and time preferences section completed."
 }
 
 # ---------- Section 10 ----------
@@ -1350,6 +1340,7 @@ section_11_nemo_preferences() {
   echo "  Skipped settings : $skipped_count"
 
   run_as_user_shell "nemo -q >/dev/null 2>&1 || true"
+  success "Nemo preferences section completed."
 }
 
 # ---------- Section 12 ----------
@@ -1362,9 +1353,7 @@ section_12_nemo_enhancements() {
   fi
 
   if ! pkg_installed nemo-media-columns; then
-    if apt_candidate_exists nemo-media-columns; then
-      pkg_install nemo-media-columns || true
-    fi
+    pkg_install nemo-media-columns || true
   fi
 
   local version="1.0.4"
@@ -1374,15 +1363,18 @@ section_12_nemo_enhancements() {
   ensure_dir "$DOWNLOAD_DIR"
 
   if [[ ! -f "$deb_file" ]]; then
-    run_with_spinner "Downloading nemo-mediainfo-tab" run_as_user wget -O "$deb_file" "$deb_url" || {
-      record_failure "nemo-mediainfo-tab"
-      return 1
-    }
+    run_as_user wget -O "$deb_file" "$deb_url" >>"$LOG_FILE" 2>&1 \
+      && success "Downloaded nemo-mediainfo-tab to $deb_file" \
+      || {
+        error "Download failed: $deb_url"
+        record_failure "nemo-mediainfo-tab"
+        return 1
+      }
   else
     success "Installer already downloaded: $deb_file"
   fi
 
-  sudo_run_with_spinner "Install nemo-mediainfo-tab package" dpkg -i "$deb_file" || true
+  sudo_run "Install nemo-mediainfo-tab package" dpkg -i "$deb_file" || true
   pkg_fix_broken
   run_as_user_shell "nemo -q >/dev/null 2>&1 || true"
   success "Nemo enhancement installation complete."
@@ -1430,7 +1422,7 @@ section_13_winboat() {
         record_failure "winboat-docker-start"
       fi
     fi
-  fi
+  }
 
   if systemctl is-enabled --quiet docker 2>/dev/null; then
     success "Docker service is enabled at boot"
@@ -1509,7 +1501,7 @@ section_14_jdownloader() {
 
   if [[ -n "${JDOWNLOADER_URL:-}" ]]; then
     info "Using JDOWNLOADER_URL from environment"
-    if run_with_spinner "Downloading JDownloader installer" run_as_user wget -O "$installer" "$JDOWNLOADER_URL"; then
+    if run_as_user wget -O "$installer" "$JDOWNLOADER_URL" >>"$LOG_FILE" 2>&1; then
       success "Downloaded JDownloader installer"
     else
       error "Direct JDownloader download failed"
@@ -1674,8 +1666,7 @@ show_menu() {
   format_menu_item 14 "Section 14 - JDownloader"
   format_menu_item 15 "Section 15 - Validation Report"
   echo " 16) Run ALL sections (prompt before each)"
-  echo " 17) Reset all section statuses to pending"
-  echo " 18) Exit"
+  echo " 17) Exit"
   echo
 }
 
@@ -1683,6 +1674,7 @@ main() {
   require_sudo
   detect_os
   ensure_dir "$DOWNLOAD_DIR"
+  init_section_status
   load_section_status
 
   info "Starting $SCRIPT_NAME as user: $STARTING_USER"
@@ -1691,7 +1683,7 @@ main() {
 
   while true; do
     show_menu
-    read -r -p "Select an option [0-18]: " choice
+    read -r -p "Select an option [0-17]: " choice
 
     case "$choice" in
       0)  run_section 0 section_0_preflight; press_enter ;;
@@ -1711,8 +1703,7 @@ main() {
       14) run_section 14 section_14_jdownloader; press_enter ;;
       15) run_section 15 section_15_validation_report; press_enter ;;
       16) run_all_sections; press_enter ;;
-      17) reset_section_status; press_enter ;;
-      18) success "Exiting."; exit 0 ;;
+      17) success "Exiting."; exit 0 ;;
       *)  warn "Invalid selection."; press_enter ;;
     esac
   done
