@@ -1422,7 +1422,7 @@ section_13_winboat() {
         record_failure "winboat-docker-start"
       fi
     fi
-  }
+  fi
 
   if systemctl is-enabled --quiet docker 2>/dev/null; then
     success "Docker service is enabled at boot"
