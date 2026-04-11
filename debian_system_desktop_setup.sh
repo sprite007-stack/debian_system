@@ -236,6 +236,12 @@ sudo_run_live() {
   local desc="$1"
   shift
 
+  case "$1" in
+    apt|apt-get|nala|dpkg)
+      wait_for_apt_lock || return 1
+      ;;
+  esac
+
   info "$desc"
   echo "------------------------------------------------------------"
   if sudo "$@" 2>&1 | tee -a "$LOG_FILE"; then
@@ -251,6 +257,32 @@ sudo_run_live() {
 
 pkg_installed() {
   dpkg -s "$1" >/dev/null 2>&1
+}
+
+wait_for_apt_lock() {
+  local timeout="${1:-600}"
+  local waited=0
+  local lock_pids=""
+
+  info "Checking for active apt/dpkg locks..."
+
+  while true; do
+    lock_pids="$(sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null | xargs -r echo)"
+
+    if [[ -z "$lock_pids" ]]; then
+      success "No active apt/dpkg lock detected."
+      return 0
+    fi
+
+    warn "apt/dpkg lock in use by PID(s): $lock_pids - waiting..."
+    sleep 5
+    waited=$((waited + 5))
+
+    if (( waited >= timeout )); then
+      error "Timed out waiting for apt/dpkg lock after ${timeout} seconds."
+      return 1
+    fi
+  done
 }
 
 fix_user_file_ownership() {
@@ -370,6 +402,7 @@ print_detected_environment() {
 
 # ---------- Package Manager Wrappers ----------
 pkg_update() {
+  wait_for_apt_lock || return 1
   if command_exists nala; then
     sudo nala update 2>&1 | tee -a "$LOG_FILE"
   else
@@ -378,6 +411,7 @@ pkg_update() {
 }
 
 pkg_upgrade_full() {
+  wait_for_apt_lock || return 1
   if command_exists nala; then
     sudo nala upgrade -y 2>&1 | tee -a "$LOG_FILE"
   else
@@ -386,6 +420,7 @@ pkg_upgrade_full() {
 }
 
 pkg_install() {
+  wait_for_apt_lock || return 1
   if command_exists nala; then
     sudo nala install -y "$@" 2>&1 | tee -a "$LOG_FILE"
   else
@@ -394,13 +429,16 @@ pkg_install() {
 }
 
 pkg_fix_broken() {
+  wait_for_apt_lock || return 1
   if command_exists nala; then
     sudo nala install -f -y 2>&1 | tee -a "$LOG_FILE" || true
+    wait_for_apt_lock || return 1
     sudo nala --fix-broken install -y 2>&1 | tee -a "$LOG_FILE" || true
   else
     sudo apt-get install -f -y 2>&1 | tee -a "$LOG_FILE" || true
   fi
 }
+
 
 # ---------- GSettings Helpers ----------
 gsettings_key_exists() {
@@ -695,35 +733,37 @@ section_0_preflight() {
 section_1_system_update() {
   show_section_header "Section 1 - System Update & Upgrade"
 
-  sudo_run "Allow apt release info version changes" bash -c \
-    'echo '\''Acquire::AllowReleaseInfoChange "true";'\'' > /etc/apt/apt.conf.d/99releaseinfo'
+  sudo_run "Allow apt release info version changes" bash -c     'echo '''Acquire::AllowReleaseInfoChange "true";''' > /etc/apt/apt.conf.d/99releaseinfo' || return 1
 
   info "Recovering package manager state if needed..."
+  wait_for_apt_lock || return 1
   sudo dpkg --configure -a >>"$LOG_FILE" 2>&1 || true
+
+  wait_for_apt_lock || return 1
   sudo apt-get --fix-broken install -y >>"$LOG_FILE" 2>&1 || true
 
   info "Forcing APT to use IPv4 for better repo reliability..."
   echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 >/dev/null
 
-  sudo_run_live "Update apt package lists (allow release info version change)" \
-    apt-get update -o Acquire::AllowReleaseInfoChange::Version=true
+  sudo_run_live "Update apt package lists (allow release info version change)"     apt-get update -o Acquire::AllowReleaseInfoChange::Version=true || return 1
 
-  sudo_run_live "Run apt full-upgrade" apt-get -y full-upgrade
+  sudo_run_live "Run apt full-upgrade" apt-get -y full-upgrade || return 1
 
   if ! command_exists nala; then
-    sudo_run_live "Install nala" apt-get install -y nala || true
+    sudo_run_live "Install nala" apt-get install -y nala || return 1
   else
     success "nala is already installed"
   fi
 
   if command_exists nala; then
-    sudo_run_live "Update package lists with nala" nala update
-    sudo_run_live "Upgrade packages with nala" nala upgrade -y
+    sudo_run_live "Update package lists with nala" nala update || return 1
+    sudo_run_live "Upgrade packages with nala" nala upgrade -y || return 1
   else
-    sudo_run_live "Update package lists with apt-get" apt-get update
-    sudo_run_live "Upgrade packages with apt-get" apt-get -y full-upgrade
+    sudo_run_live "Update package lists with apt-get" apt-get update || return 1
+    sudo_run_live "Upgrade packages with apt-get" apt-get -y full-upgrade || return 1
   fi
 }
+
 
 # ---------- Section 2 ----------
 section_2_core_and_vendor_apps() {
@@ -1002,7 +1042,12 @@ EOF
   info "Docker repo file:"
   sudo cat /etc/apt/sources.list.d/docker.sources | tee -a "$LOG_FILE"
 
-  if apt-cache policy docker-ce | tee -a "$LOG_FILE" | grep -q "Candidate:"; then
+  info "Checking docker-ce package visibility..."
+  local docker_madison
+  docker_madison="$(apt-cache madison docker-ce 2>&1)"
+  echo "$docker_madison" | tee -a "$LOG_FILE"
+
+  if [[ -n "$docker_madison" ]]; then
     success "docker-ce package is visible from configured repositories."
   else
     error "docker-ce package is still not visible after repo setup."
