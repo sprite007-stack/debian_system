@@ -1244,7 +1244,7 @@ section_7_zsh_default_shell() {
   info "Login shell (system): ${login_shell:-<unknown>}"
 
   if [[ -n "$session_shell" && "$session_shell" != "$login_shell" ]]; then
-    warn "Current session is still using the old shell. Log out and back in or run: exec zsh -l"
+    warn "Current session is still using the old shell. Log out and back in or run: exec zsh -l Pick Option #2"
   fi
 
   warn "If your terminal profile runs a custom command, set it to: /usr/bin/zsh -l"
