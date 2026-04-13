@@ -748,9 +748,10 @@ section_0_preflight() {
 }
 
 # ---------- Section 1 ----------
-section_1_system_update() {
+section_1_system_update_upgrade() {
   show_section_header "Section 1 - System Update & Upgrade"
 
+  # --- Allow release info change (FIXED with tee) ---
   info "Allow apt release info version changes"
   if echo 'Acquire::AllowReleaseInfoChange "true";' | sudo tee /etc/apt/apt.conf.d/99releaseinfo >/dev/null; then
     success "Allow apt release info version changes"
@@ -759,33 +760,66 @@ section_1_system_update() {
     return 1
   fi
 
+  # --- Force IPv4 (already good pattern) ---
+  info "Forcing APT to use IPv4 for better repo reliability..."
+  if echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 >/dev/null; then
+    success "Force IPv4 configured"
+  else
+    warn "Failed to configure IPv4 forcing"
+  fi
+
+  # --- Preseed keyboard config to avoid interactive prompt ---
+  info "Preseeding keyboard configuration for unattended upgrades"
+  sudo debconf-set-selections <<'EOF'
+keyboard-configuration keyboard-configuration/layoutcode string us
+keyboard-configuration keyboard-configuration/modelcode string pc105
+EOF
+
+  # --- Recover dpkg state if needed ---
   info "Recovering package manager state if needed..."
-  wait_for_apt_lock || return 1
   sudo dpkg --configure -a >>"$LOG_FILE" 2>&1 || true
 
-  wait_for_apt_lock || return 1
-  sudo apt-get --fix-broken install -y >>"$LOG_FILE" 2>&1 || true
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    >>"$LOG_FILE" 2>&1 || true
 
-  info "Forcing APT to use IPv4 for better repo reliability..."
-  echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 >/dev/null
+  # --- Update package lists ---
+  sudo_run_live "Update apt package lists (allow release info version change)" \
+    env DEBIAN_FRONTEND=noninteractive apt-get update --allow-releaseinfo-change || return 1
 
-  sudo_run_live "Update apt package lists (allow release info version change)"     apt-get update -o Acquire::AllowReleaseInfoChange::Version=true || return 1
+  # --- Full upgrade (NONINTERACTIVE FIX) ---
+  sudo_run_live "Run apt full-upgrade" \
+    env DEBIAN_FRONTEND=noninteractive apt-get -y \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    full-upgrade || return 1
 
-  sudo_run_live "Run apt full-upgrade" apt-get -y full-upgrade || return 1
-
-  if ! command_exists nala; then
-    sudo_run_live "Install nala" apt-get install -y nala || return 1
+  # --- Install nala (if not present) ---
+  if ! command -v nala >/dev/null 2>&1; then
+    sudo_run_live "Install nala" \
+      env DEBIAN_FRONTEND=noninteractive apt-get install -y nala || return 1
   else
-    success "nala is already installed"
+    success "nala already installed"
   fi
 
-  if command_exists nala; then
-    sudo_run_live "Update package lists with nala" nala update || return 1
-    sudo_run_live "Upgrade packages with nala" nala upgrade -y || return 1
+  # --- Refresh package lists ---
+  sudo_run_live "Update package lists with apt-get" \
+    env DEBIAN_FRONTEND=noninteractive apt-get update || return 1
+
+  # --- Upgrade with nala if available ---
+  if command -v nala >/dev/null 2>&1; then
+    sudo_run_live "Upgrade packages with nala" \
+      env DEBIAN_FRONTEND=noninteractive nala upgrade -y || return 1
   else
-    sudo_run_live "Update package lists with apt-get" apt-get update || return 1
-    sudo_run_live "Upgrade packages with apt-get" apt-get -y full-upgrade || return 1
+    sudo_run_live "Upgrade packages with apt-get" \
+      env DEBIAN_FRONTEND=noninteractive apt-get -y \
+      -o Dpkg::Options::="--force-confdef" \
+      -o Dpkg::Options::="--force-confold" \
+      full-upgrade || return 1
   fi
+
+  success "System update & upgrade completed successfully"
 }
 
 
