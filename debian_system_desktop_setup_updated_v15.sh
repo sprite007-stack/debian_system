@@ -751,7 +751,13 @@ section_0_preflight() {
 section_1_system_update() {
   show_section_header "Section 1 - System Update & Upgrade"
 
-  sudo_run "Allow apt release info version changes" bash -c     'echo '''Acquire::AllowReleaseInfoChange "true";''' > /etc/apt/apt.conf.d/99releaseinfo' || return 1
+  info "Allow apt release info version changes"
+  if echo 'Acquire::AllowReleaseInfoChange "true";' | sudo tee /etc/apt/apt.conf.d/99releaseinfo >/dev/null; then
+    success "Allow apt release info version changes"
+  else
+    error "Allow apt release info version changes"
+    return 1
+  fi
 
   info "Recovering package manager state if needed..."
   wait_for_apt_lock || return 1
