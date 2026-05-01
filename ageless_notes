@@ -1,0 +1,13 @@
+Standard Mode
+Installs Ageless Linux identity, neutralizes the systemd userdb birthDate field, and deploys a stub age verification API that returns no data. Preserves a thin "good faith effort" argument.
+
+curl -fsSL https://agelesslinux.org/become-ageless.sh | sudo bash -s -- --accept
+
+Dry Run & Revert
+Preview every change before committing. Undo everything afterward. The script records all actions to /etc/agelesslinux.conf so revert can cleanly restore your system.
+
+# See what would happen without changing anything:
+curl -fsSL https://agelesslinux.org/become-ageless.sh | sudo bash -s -- --dry-run
+
+# Undo a previous conversion:
+curl -fsSL https://agelesslinux.org/become-ageless.sh | sudo bash -s -- --revert
