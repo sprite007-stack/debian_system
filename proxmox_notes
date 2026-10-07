@@ -89,6 +89,16 @@ General
     Export: pick from dropdown
     Content: Pick one
 
+Mount SMB/CIFS Share on Proxmox
+Datacenter > Storage > add > SMB/CIFS 
+General
+    ID: synods2422-smb      #Make up name for NFS share
+    Server: 10.0.0.45        #IP address of synology
+    Username:
+    Password:
+    Export: pick from dropdown
+    Content: Pick one
+
 #Configuring Mount Points for services
 pct set 302 --mp1 /mnt/pve/storage/downloads/,mp=/downloads
 pct set 307 --mp2 /mnt/pve/storage/media,mp=/media
